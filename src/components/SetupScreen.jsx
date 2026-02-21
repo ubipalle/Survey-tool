@@ -16,7 +16,7 @@ export default function SetupScreen({ savedCredentials, onComplete, googleUser, 
   // Site info
   const [siteName, setSiteName] = useState('');
 
-  // Camera data — manual upload
+  // Camera data
   const [cameraJson, setCameraJson] = useState(null);
   const [fileName, setFileName] = useState('');
   const fileRef = useRef();
@@ -29,9 +29,8 @@ export default function SetupScreen({ savedCredentials, onComplete, googleUser, 
   const [projectFolders, setProjectFolders] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectSubfolders, setProjectSubfolders] = useState(null);
-  const [cameraFiles, setCameraFiles] = useState([]);
-  const [loadingCameraFile, setLoadingCameraFile] = useState(false);
-  const [cameraSource, setCameraSource] = useState(''); // 'gdrive' or 'upload'
+  const [cameraFileStatus, setCameraFileStatus] = useState('idle'); // 'idle' | 'loading' | 'loaded' | 'not-found' | 'error'
+  const [cameraFileError, setCameraFileError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Error
@@ -80,48 +79,61 @@ export default function SetupScreen({ savedCredentials, onComplete, googleUser, 
     setSiteName(folder.name);
     setDriveLoading(true);
     setDriveError('');
+    setCameraJson(null);
+    setFileName('');
+    setCameraFileStatus('loading');
+    setCameraFileError('');
 
     try {
       // Ensure subfolder structure exists
       const subfolders = await ensureSurveyFolders(folder.id, sharedDrive.id);
       setProjectSubfolders(subfolders);
 
-      // Check for camera placement files
+      // Look for camera placement files
       const files = await listFiles(subfolders.cameraPlacementsFolder, sharedDrive.id);
       const jsonFiles = files.filter((f) => f.name.endsWith('.json'));
-      setCameraFiles(jsonFiles);
 
-      // If there's exactly one JSON file, auto-load it
-      if (jsonFiles.length === 1) {
-        await handleLoadCameraFile(jsonFiles[0]);
+      if (jsonFiles.length === 0) {
+        setCameraFileStatus('not-found');
+      } else {
+        // Load the first (or only) JSON file
+        const file = jsonFiles[0];
+        try {
+          const json = await downloadJsonFile(file.id);
+          if (!json.cameras || !Array.isArray(json.cameras)) {
+            setCameraFileStatus('error');
+            setCameraFileError(`"${file.name}" is not a valid camera placement file (missing "cameras" array).`);
+          } else {
+            setCameraJson(json);
+            setFileName(file.name);
+            setCameraFileStatus('loaded');
+
+            // If there are multiple files, log it
+            if (jsonFiles.length > 1) {
+              console.log(`Found ${jsonFiles.length} JSON files in Camera Placements, loaded: ${file.name}`);
+            }
+          }
+        } catch (err) {
+          setCameraFileStatus('error');
+          setCameraFileError(`Failed to load "${file.name}": ${err.message}`);
+        }
       }
     } catch (err) {
       console.error('Project load error:', err);
       setDriveError(err.message);
+      setCameraFileStatus('error');
+      setCameraFileError(err.message);
     }
     setDriveLoading(false);
   };
 
-  const handleLoadCameraFile = async (file) => {
-    setLoadingCameraFile(true);
-    try {
-      const json = await downloadJsonFile(file.id);
-      if (!json.cameras || !Array.isArray(json.cameras)) {
-        setError('Invalid camera JSON: missing "cameras" array');
-        setCameraJson(null);
-        setLoadingCameraFile(false);
-        return;
-      }
-      setCameraJson(json);
-      setFileName(file.name);
-      setCameraSource('gdrive');
-      setError('');
-    } catch (err) {
-      setError('Failed to load camera file: ' + err.message);
+  const handleRetryLoadCamera = () => {
+    if (selectedProject && sharedDrive) {
+      handleSelectProject(selectedProject);
     }
-    setLoadingCameraFile(false);
   };
 
+  // Manual file upload — only used when NOT connected to GDrive
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -137,7 +149,6 @@ export default function SetupScreen({ savedCredentials, onComplete, googleUser, 
           return;
         }
         setCameraJson(json);
-        setCameraSource('upload');
         setError('');
 
         if (!siteName) {
@@ -194,7 +205,7 @@ export default function SetupScreen({ savedCredentials, onComplete, googleUser, 
     <div className="screen animate-in">
       <h1 className="screen__title">New Site Survey</h1>
       <p className="screen__subtitle">
-        Connect to Google Drive, select a project, and load camera placements.
+        Connect to Google Drive, select a project, and start surveying.
       </p>
 
       {/* Step 1: Google Drive Connection */}
@@ -271,7 +282,7 @@ export default function SetupScreen({ savedCredentials, onComplete, googleUser, 
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{selectedProject.name}</div>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                  Subfolders created
+                  Subfolders ready
                 </div>
               </div>
               <button
@@ -279,10 +290,10 @@ export default function SetupScreen({ savedCredentials, onComplete, googleUser, 
                 onClick={() => {
                   setSelectedProject(null);
                   setProjectSubfolders(null);
-                  setCameraFiles([]);
                   setCameraJson(null);
                   setFileName('');
-                  setCameraSource('');
+                  setCameraFileStatus('idle');
+                  setCameraFileError('');
                 }}
               >
                 Change
@@ -321,7 +332,6 @@ export default function SetupScreen({ savedCredentials, onComplete, googleUser, 
                         borderRadius: 'var(--radius-sm)',
                         cursor: 'pointer',
                         transition: 'background 0.15s',
-                        ':hover': { background: 'var(--bg-hover)' },
                       }}
                       onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
                       onMouseLeave={(e) => e.currentTarget.style.background = ''}
@@ -339,11 +349,171 @@ export default function SetupScreen({ savedCredentials, onComplete, googleUser, 
         </div>
       )}
 
-      {/* Step 3: MappedIn Credentials */}
+      {/* Step 3: Camera Placements — auto-loaded from GDrive */}
+      {selectedProject && (
+        <div className="card animate-in">
+          <div className="card__label">
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <StepNumber n={3} done={cameraFileStatus === 'loaded'} />
+              Camera Placements
+            </span>
+          </div>
+
+          {cameraFileStatus === 'loading' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0' }}>
+              <div className="spinner" style={{ width: 20, height: 20 }} />
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                Looking for camera placements...
+              </span>
+            </div>
+          )}
+
+          {cameraFileStatus === 'loaded' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{fileName}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                  {cameraJson.cameras.length} camera{cameraJson.cameras.length !== 1 ? 's' : ''} loaded from Google Drive
+                </div>
+              </div>
+              <span className="badge badge--success">Ready</span>
+            </div>
+          )}
+
+          {cameraFileStatus === 'not-found' && (
+            <div>
+              <div style={{
+                padding: '14px 16px',
+                background: 'var(--warning-bg)',
+                border: '1px solid var(--warning)',
+                borderRadius: 'var(--radius-md)',
+                marginBottom: '12px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--warning)' }}>
+                    No camera placement file found
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  Please ask the presales team to upload a camera placement JSON file to:
+                </div>
+                <div style={{
+                  fontSize: '0.75rem', fontFamily: 'var(--font-mono)',
+                  color: 'var(--text-primary)', marginTop: '6px',
+                  padding: '6px 10px', background: 'var(--bg-secondary)',
+                  borderRadius: 'var(--radius-sm)',
+                }}>
+                  {selectedProject.name}/Camera Placements/
+                </div>
+              </div>
+              <button
+                className="btn btn--secondary btn--block"
+                onClick={handleRetryLoadCamera}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="23 4 23 10 17 10" />
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+                Check again
+              </button>
+            </div>
+          )}
+
+          {cameraFileStatus === 'error' && (
+            <div>
+              <div style={{
+                padding: '10px 14px',
+                background: 'var(--danger-bg)',
+                border: '1px solid var(--danger)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--danger)',
+                fontSize: '0.85rem',
+                marginBottom: '12px',
+              }}>
+                {cameraFileError}
+              </div>
+              <button
+                className="btn btn--secondary btn--block"
+                onClick={handleRetryLoadCamera}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="23 4 23 10 17 10" />
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+                Retry
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Step 3 (alt): Manual upload — only when NOT connected to GDrive */}
+      {!googleUser && (
+        <div className="card">
+          <div className="card__label">
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <StepNumber n={2} done={!!cameraJson} />
+              Camera Placements
+            </span>
+          </div>
+
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".json"
+            onChange={handleFileUpload}
+            style={{ display: 'none' }}
+          />
+
+          {!cameraJson ? (
+            <button
+              className="btn btn--secondary btn--block"
+              onClick={() => fileRef.current?.click()}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              Upload Camera JSON
+            </button>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{fileName}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                  {cameraJson.cameras.length} camera{cameraJson.cameras.length !== 1 ? 's' : ''} found
+                </div>
+              </div>
+              <button
+                className="btn btn--sm btn--secondary"
+                onClick={() => {
+                  setCameraJson(null);
+                  setFileName('');
+                  if (fileRef.current) fileRef.current.value = '';
+                }}
+              >
+                Change
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Step 4 (or 3 without GDrive): MappedIn Credentials */}
       <div className="card">
         <div className="card__label">
           <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <StepNumber n={3} done={!!(key && secret && mapId)} />
+            <StepNumber n={googleUser ? 4 : 3} done={!!(key && secret && mapId)} />
             MappedIn Credentials
           </span>
         </div>
@@ -384,92 +554,7 @@ export default function SetupScreen({ savedCredentials, onComplete, googleUser, 
         </div>
       </div>
 
-      {/* Step 4: Camera Placements */}
-      <div className="card">
-        <div className="card__label">
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <StepNumber n={4} done={!!cameraJson} />
-            Camera Placements
-          </span>
-        </div>
-
-        {/* Camera files from GDrive */}
-        {cameraFiles.length > 0 && !cameraJson && (
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-              Found in Google Drive:
-            </div>
-            {cameraFiles.map((file) => (
-              <button
-                key={file.id}
-                className="btn btn--secondary btn--block"
-                style={{ marginBottom: '4px', justifyContent: 'flex-start' }}
-                disabled={loadingCameraFile}
-                onClick={() => handleLoadCameraFile(file)}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                </svg>
-                {file.name}
-              </button>
-            ))}
-            <div style={{
-              textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-muted)',
-              margin: '10px 0 4px',
-            }}>
-              — or upload manually —
-            </div>
-          </div>
-        )}
-
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".json"
-          onChange={handleFileUpload}
-          style={{ display: 'none' }}
-        />
-
-        {!cameraJson ? (
-          <button
-            className="btn btn--secondary btn--block"
-            onClick={() => fileRef.current?.click()}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            Upload Camera JSON
-          </button>
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{fileName}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                {cameraJson.cameras.length} camera{cameraJson.cameras.length !== 1 ? 's' : ''} found
-                {cameraSource === 'gdrive' && (
-                  <span style={{ color: 'var(--accent)' }}> · from Google Drive</span>
-                )}
-              </div>
-            </div>
-            <button
-              className="btn btn--sm btn--secondary"
-              onClick={() => {
-                setCameraJson(null);
-                setFileName('');
-                setCameraSource('');
-                if (fileRef.current) fileRef.current.value = '';
-              }}
-            >
-              Change
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Site Name (only if not auto-filled from GDrive) */}
+      {/* Site Name — only when NOT using GDrive */}
       {!selectedProject && (
         <div className="card">
           <div className="card__label">Site Information</div>
