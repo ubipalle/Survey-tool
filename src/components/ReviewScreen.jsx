@@ -3,6 +3,89 @@ import { exportSurveyPayload } from '../utils/storage';
 import { uploadJsonFile, uploadPhoto } from '../utils/googleDrive';
 import { isSignedIn } from '../utils/googleAuth';
 
+/**
+ * Calculate approximate distance between two lat/lng points in meters.
+ */
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Build the updated camera placements JSON.
+ * Same format as the original input, but with coordinates updated for repositioned cameras.
+ */
+function buildUpdatedPlacements(originalCameraJson, surveyItems) {
+  if (!originalCameraJson?.cameras) return null;
+
+  // Collect all camera updates from survey items
+  const cameraUpdates = {};
+  for (const item of surveyItems) {
+    for (const cam of item.cameras) {
+      if (cam.repositioned) {
+        cameraUpdates[cam.id] = cam;
+      }
+    }
+  }
+
+  // Apply updates to a copy of the original
+  const updatedCameras = originalCameraJson.cameras.map((cam) => {
+    const update = cameraUpdates[cam.id];
+    if (!update) return { ...cam };
+    return {
+      ...cam,
+      latitude: update.newLatitude,
+      longitude: update.newLongitude,
+    };
+  });
+
+  return { ...originalCameraJson, cameras: updatedCameras };
+}
+
+/**
+ * Build the camera changes array for inclusion in the survey JSON.
+ */
+function buildCameraChanges(originalCameraJson, surveyItems) {
+  if (!originalCameraJson?.cameras) return [];
+
+  const originalMap = {};
+  for (const cam of originalCameraJson.cameras) {
+    originalMap[cam.id] = cam;
+  }
+
+  const changes = [];
+  for (const item of surveyItems) {
+    for (const cam of item.cameras) {
+      if (cam.repositioned) {
+        const orig = originalMap[cam.id];
+        const distance = orig
+          ? haversineDistance(orig.latitude, orig.longitude, cam.newLatitude, cam.newLongitude)
+          : null;
+
+        changes.push({
+          id: cam.id,
+          name: cam.name || cam.id,
+          room: item.roomName,
+          reason: cam.repositionReason || null,
+          original: orig
+            ? { latitude: orig.latitude, longitude: orig.longitude }
+            : null,
+          new: { latitude: cam.newLatitude, longitude: cam.newLongitude },
+          distanceMeters: distance !== null ? Math.round(distance * 10) / 10 : null,
+        });
+      }
+    }
+  }
+
+  return changes;
+}
+
 export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, onReset }) {
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
@@ -24,12 +107,27 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
   const hasGdrive = !!config.gdriveProject;
   const signedIn = isSignedIn();
 
+  // Build camera changes for display
+  const cameraChanges = buildCameraChanges(config.cameraJson, surveyItems);
+
+  const buildPayload = () => {
+    return {
+      ...exportSurveyPayload(surveyItems, {
+        surveyId: `survey_${Date.now()}`,
+        mapId: config.credentials.mapId,
+        siteName: config.siteName,
+      }),
+      cameraChanges: {
+        totalCameras,
+        repositioned,
+        unchanged: totalCameras - repositioned,
+        changes: cameraChanges,
+      },
+    };
+  };
+
   const handleExportJSON = () => {
-    const payload = exportSurveyPayload(surveyItems, {
-      surveyId: `survey_${Date.now()}`,
-      mapId: config.credentials.mapId,
-      siteName: config.siteName,
-    });
+    const payload = buildPayload();
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -53,18 +151,27 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
       const dateStr = new Date().toISOString().slice(0, 10);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
-      // 1. Upload survey JSON
+      // 1. Upload survey JSON (includes camera changes)
       setUploadProgress('Uploading survey data...');
-      const payload = exportSurveyPayload(surveyItems, {
-        surveyId: `survey_${Date.now()}`,
-        mapId: config.credentials.mapId,
-        siteName: config.siteName,
-      });
-
+      const payload = buildPayload();
       const jsonFilename = `survey_${dateStr}_${timestamp}.json`;
       await uploadJsonFile(jsonFilename, payload, subfolders.surveys);
 
-      // 2. Upload photos
+      // 2. Upload updated camera placements (if any cameras moved)
+      if (repositioned > 0) {
+        setUploadProgress('Uploading updated camera placements...');
+        const updatedPlacements = buildUpdatedPlacements(config.cameraJson, surveyItems);
+        if (updatedPlacements) {
+          const placementsFilename = `camera-placements-updated_${dateStr}.json`;
+          await uploadJsonFile(
+            placementsFilename,
+            updatedPlacements,
+            subfolders.cameraPlacementsFolder
+          );
+        }
+      }
+
+      // 3. Upload photos
       let photoCount = 0;
       for (const item of surveyItems) {
         for (let i = 0; i < item.survey.photos.length; i++) {
@@ -167,6 +274,50 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
         </div>
       )}
 
+      {/* Camera Changes */}
+      {cameraChanges.length > 0 && (
+        <div className="card">
+          <div className="card__label">Camera Repositioning Log</div>
+          {cameraChanges.map((change) => (
+            <div
+              key={change.id}
+              style={{
+                padding: '10px 0',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex', alignItems: 'flex-start', gap: '10px',
+              }}
+            >
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: 'var(--teal)', flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginTop: '2px',
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                  <circle cx="12" cy="10" r="3"/>
+                </svg>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{change.name}</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                  {change.room}
+                  {change.distanceMeters !== null && ` · moved ${change.distanceMeters}m`}
+                </div>
+                {change.reason && (
+                  <div style={{
+                    fontSize: '0.7rem', color: 'var(--text-secondary)',
+                    marginTop: '2px', fontStyle: 'italic',
+                  }}>
+                    {change.reason}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Completed Room Breakdown */}
       {completed > 0 && (
         <div className="card">
@@ -203,7 +354,7 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
       {/* Action Buttons */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
 
-        {/* Google Drive Upload — primary action if connected */}
+        {/* Google Drive Upload */}
         {hasGdrive && signedIn ? (
           <button
             className={`btn btn--lg btn--block ${uploaded ? 'btn--success' : 'btn--primary'}`}
@@ -242,6 +393,11 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
             fontFamily: 'var(--font-mono)', padding: '0 8px',
           }}>
             → {config.gdriveProject.projectName}/Surveys/
+            {repositioned > 0 && (
+              <>
+                <br />→ {config.gdriveProject.projectName}/Camera Placements/ (updated positions)
+              </>
+            )}
           </div>
         )}
 
@@ -259,7 +415,7 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
           </div>
         )}
 
-        {/* JSON download — always available */}
+        {/* JSON download */}
         <button
           className={`btn btn--block ${hasGdrive && signedIn ? 'btn--secondary' : 'btn--primary btn--lg'}`}
           onClick={handleExportJSON}
@@ -267,7 +423,7 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
           {exported ? '✓ JSON Downloaded' : 'Download JSON'}
         </button>
 
-        {/* Back to survey — prominent */}
+        {/* Back to survey */}
         <button className="btn btn--secondary btn--block" onClick={onBack}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />

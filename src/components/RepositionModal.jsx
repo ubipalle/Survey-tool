@@ -3,6 +3,7 @@ import React, { useRef, useEffect, useState } from 'react';
 /**
  * RepositionModal — Full-screen map overlay for repositioning a camera.
  * Opens centered on the camera's current position, tap to set new location.
+ * Includes optional reason field for documenting why the camera was moved.
  */
 export default function RepositionModal({ credentials, floorId, camera, onConfirm, onCancel }) {
   const containerRef = useRef(null);
@@ -12,6 +13,7 @@ export default function RepositionModal({ credentials, floorId, camera, onConfir
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [newPosition, setNewPosition] = useState(null);
+  const [reason, setReason] = useState(camera.repositionReason || '');
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -180,7 +182,12 @@ export default function RepositionModal({ credentials, floorId, camera, onConfir
 
   const handleConfirm = () => {
     if (newPositionRef.current) {
-      onConfirm(camera.id, newPositionRef.current.latitude, newPositionRef.current.longitude);
+      onConfirm(
+        camera.id,
+        newPositionRef.current.latitude,
+        newPositionRef.current.longitude,
+        reason.trim() || null
+      );
     }
   };
 
@@ -260,30 +267,48 @@ export default function RepositionModal({ credentials, floorId, camera, onConfir
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
       </div>
 
-      {/* Bottom legend */}
+      {/* Reason field + legend */}
       <div style={{
-        padding: '10px 16px',
+        padding: '12px 16px',
         background: 'var(--bg-secondary)',
         borderTop: '1px solid var(--border)',
-        display: 'flex', justifyContent: 'center', gap: '24px',
-        fontSize: '0.75rem', color: 'var(--text-secondary)',
       }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{
-            width: '12px', height: '12px', borderRadius: '50%',
-            background: '#d4a843', border: '2px solid #fff',
-            display: 'inline-block', boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
-          }} />
-          Current
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{
-            width: '12px', height: '12px', borderRadius: '50%',
-            background: '#26a69a', border: '2px solid #fff',
-            display: 'inline-block', boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
-          }} />
-          New position
-        </span>
+        {/* Reason input — shown after placing a new position */}
+        {newPosition && (
+          <div style={{ marginBottom: '10px' }}>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Reason for moving (optional, e.g. obstructed by pillar)"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              style={{ fontSize: '0.8rem' }}
+            />
+          </div>
+        )}
+
+        {/* Legend */}
+        <div style={{
+          display: 'flex', justifyContent: 'center', gap: '24px',
+          fontSize: '0.75rem', color: 'var(--text-secondary)',
+        }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{
+              width: '12px', height: '12px', borderRadius: '50%',
+              background: '#d4a843', border: '2px solid #fff',
+              display: 'inline-block', boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+            }} />
+            Current
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{
+              width: '12px', height: '12px', borderRadius: '50%',
+              background: '#26a69a', border: '2px solid #fff',
+              display: 'inline-block', boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+            }} />
+            New position
+          </span>
+        </div>
       </div>
     </div>
   );

@@ -63,11 +63,12 @@ export default function SurveyView({
   );
 
   const handleRepositionConfirm = useCallback(
-    (cameraId, latitude, longitude) => {
+    (cameraId, latitude, longitude, reason) => {
       onUpdateCamera(cameraId, {
         newLatitude: latitude,
         newLongitude: longitude,
         repositioned: true,
+        repositionReason: reason || null,
       });
       setRepositionCamera(null);
     },
@@ -119,7 +120,7 @@ export default function SurveyView({
             <div
               key={cam.id}
               style={{
-                display: 'flex', alignItems: 'center', gap: '12px',
+                display: 'flex', alignItems: 'flex-start', gap: '12px',
                 padding: '10px 0',
                 borderBottom: '1px solid var(--border)',
               }}
@@ -129,7 +130,7 @@ export default function SurveyView({
                 width: 36, height: 36, borderRadius: '50%',
                 background: cam.repositioned ? 'var(--teal)' : 'var(--accent)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0,
+                flexShrink: 0, marginTop: '2px',
               }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -145,15 +146,24 @@ export default function SurveyView({
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                   {cam.mountType} · {cam.height}m
                   {cam.repositioned && (
-                    <span style={{ color: 'var(--teal)', marginLeft: '6px' }}>· Repositioned</span>
+                    <span style={{ color: 'var(--teal)', marginLeft: '6px' }}>· Moved</span>
                   )}
                 </div>
+                {cam.repositioned && cam.repositionReason && (
+                  <div style={{
+                    fontSize: '0.7rem', color: 'var(--text-secondary)',
+                    marginTop: '4px', fontStyle: 'italic',
+                  }}>
+                    Reason: {cam.repositionReason}
+                  </div>
+                )}
               </div>
 
               {/* Reposition button */}
               <button
                 className="btn btn--sm btn--secondary"
                 onClick={() => setRepositionCamera(cam)}
+                style={{ flexShrink: 0 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
