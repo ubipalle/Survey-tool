@@ -18,6 +18,17 @@ Status: `[ ]` = to do, `[x]` = done, `[~]` = in progress
 - [x] Local JSON export of survey data
 - [x] Mobile-first form layout
 - [x] UI redesign — light theme matching main application design system
+- [x] Google Drive authentication (OAuth2, browser-based, Workspace internal)
+- [x] Browse & select customer project folder from shared drive
+- [x] Auto-create subfolder structure (Floor Plans, Camera Placements, Surveys, etc.)
+- [x] Auto-load camera placement JSON from GDrive project folder
+- [x] Upload survey results (JSON + photos) to GDrive
+- [x] Paginated folder listing (supports 200+ project folders)
+- [x] Camera repositioning reason field (optional)
+- [x] Upload updated camera placements file to GDrive (preserves camera IDs)
+- [x] Camera changes tracking in survey JSON (original/new coords, distance, reason)
+- [x] Clickable incomplete rooms in review screen to jump back and complete
+- [x] Camera repositioning log in review screen
 
 ---
 
@@ -25,58 +36,26 @@ Status: `[ ]` = to do, `[x]` = done, `[~]` = in progress
 
 ### P0 — Core Functionality
 
-- [ ] **Add `room` field to camera JSON schema**
-  Group cameras by room name instead of falling back to camera name.
-  Update sample JSON and docs accordingly.
+- [ ] **Clean up unused MapViewer.jsx**
+  RepositionModal now handles all map rendering. Remove or archive MapViewer.
+
+- [ ] **Form validation**
+  Require minimum fields before allowing mark-as-complete.
 
 - [ ] **Multi-floor / multi-room testing**
   Test with a realistic dataset (50+ cameras, multiple floors).
   Verify floor switching and room grouping work correctly.
 
-- [ ] **Clean up unused MapViewer.jsx**
-  RepositionModal now handles all map rendering. Remove or archive MapViewer.
+- [ ] **Floor tab labels**
+  Show human-readable floor names instead of raw floorId suffixes.
 
-- [ ] **Define standard Google Drive folder structure**
-  Establish a per-customer folder convention, e.g.:
-  ```
-  Customers/
-  └── {Customer Name}/
-      ├── Floor Plans/
-      ├── MappedIn Maps/
-      ├── Camera Placements/
-      ├── Surveys/
-      │   ├── survey-{date}.json
-      │   └── photos/
-      └── Final Placements/
-  ```
-
-### P1 — Google Drive Integration
-
-- [ ] **Google Drive authentication**
-  Set up OAuth2 / service account for Google Workspace access.
-  Decide: server-side auth proxy vs. client-side OAuth flow.
-
-- [ ] **Browse & select customer folder**
-  Allow technician to select an existing customer folder from GDrive
-  when starting a survey (instead of manual site name entry).
-
-- [ ] **Upload survey results to GDrive**
-  On survey submission:
-  - Upload survey JSON to `Surveys/` subfolder
-  - Upload photos to `Surveys/photos/` subfolder
-  - Include timestamps and technician info in filenames
-
-- [ ] **Load camera placement JSON from GDrive**
-  Instead of manual file upload, pull camera-placements.json directly
-  from the customer's `Camera Placements/` folder.
-
-### P2 — HubSpot Ticket Integration
+### P1 — HubSpot Ticket Integration
 
 - [ ] **HubSpot authentication**
   Set up private app token or OAuth for HubSpot API access.
 
 - [ ] **Create HubSpot ticket on survey completion**
-  When a survey is submitted, auto-create a ticket for the
+  When a survey is uploaded to GDrive, auto-create a ticket for the
   customer success team containing:
   - Customer/site name
   - Link to survey results in GDrive
@@ -87,7 +66,7 @@ Status: `[ ]` = to do, `[x]` = done, `[~]` = in progress
   Attach direct links to the survey JSON and photo folder
   so CS team can access everything from the ticket.
 
-### P3 — Mobile & Offline
+### P2 — Mobile & Offline
 
 - [ ] **PWA manifest + service worker**
   Make app installable on mobile home screens.
@@ -100,7 +79,7 @@ Status: `[ ]` = to do, `[x]` = done, `[~]` = in progress
 - [ ] **Auto-save indicator**
   Show save status in the UI (Saved / Saving / Offline).
 
-### P4 — Reporting & Polish
+### P3 — Reporting & Polish
 
 - [ ] **PDF survey report generation**
   Auto-generate a per-site PDF with room photos, survey data, camera positions.
@@ -113,9 +92,10 @@ Status: `[ ]` = to do, `[x]` = done, `[~]` = in progress
 
 - [ ] **Technician identification**
   Capture who performed the survey (name, email) for attribution.
+  Could auto-fill from Google account when signed in.
 
-- [ ] **Form validation**
-  Require minimum fields before allowing mark-as-complete.
+- [ ] **Map caching**
+  Cache mapData when RepositionModal opens to avoid reloading from scratch each time.
 
 ---
 
@@ -153,8 +133,9 @@ They are not yet scoped for implementation.
 ## 🐛 Known Issues
 
 - [ ] Map reloads from scratch each time RepositionModal opens (could cache mapData)
-- [ ] No validation on survey form — technician can mark complete without filling anything
 - [ ] Floor tab labels show raw floorId suffix — should show human-readable names
+- [ ] No validation on survey form — technician can mark complete without filling anything
+- [ ] Google token expires after 1 hour — no automatic refresh (user must sign in again)
 
 ---
 
@@ -166,3 +147,5 @@ They are not yet scoped for implementation.
 - Bulk photo upload from camera roll after survey
 - Comparison view: before/after camera repositioning
 - Google Sheets summary dashboard per customer
+- Slack/Google Chat notifications when survey is uploaded
+- Dark mode toggle for low-light conditions on site

@@ -20,13 +20,21 @@ export default function SurveyShell({ config, surveyItems, onUpdateItem, onUpdat
     }
   }, [jumpToRoomId]);
 
-  // Get unique floors
+  // Get unique floors with names
   const floors = useMemo(() => {
-    const floorIds = [...new Set(surveyItems.map((i) => i.floorId))];
-    return floorIds.map((fid) => ({
-      id: fid,
-      rooms: surveyItems.filter((i) => i.floorId === fid),
-    }));
+    const seen = new Set();
+    const result = [];
+    surveyItems.forEach((item) => {
+      if (!seen.has(item.floorId)) {
+        seen.add(item.floorId);
+        result.push({
+          id: item.floorId,
+          name: item.floorName || `Floor ${result.length + 1}`,
+          rooms: surveyItems.filter((i) => i.floorId === item.floorId),
+        });
+      }
+    });
+    return result;
   }, [surveyItems]);
 
   // Auto-select first floor
@@ -109,7 +117,7 @@ export default function SurveyShell({ config, surveyItems, onUpdateItem, onUpdat
                 className={`floor-tab ${activeFloor === floor.id ? 'floor-tab--active' : ''}`}
                 onClick={() => setSelectedFloor(floor.id)}
               >
-                Floor {floor.id.slice(-4)} ({floorCompleted}/{floor.rooms.length})
+                {floor.name} ({floorCompleted}/{floor.rooms.length})
               </button>
             );
           })}

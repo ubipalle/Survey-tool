@@ -10,13 +10,22 @@ export function parseCameraData(json) {
   cameras.forEach((cam) => {
     const floorId = cam.floorId || 'unknown';
     if (!byFloor[floorId]) {
-      byFloor[floorId] = [];
+      byFloor[floorId] = {
+        cameras: [],
+        // Use floorName from camera data if available
+        floorName: cam.floorName || null,
+      };
     }
-    byFloor[floorId].push(cam);
+    byFloor[floorId].cameras.push(cam);
+    // Take the first non-null floorName we find
+    if (cam.floorName && !byFloor[floorId].floorName) {
+      byFloor[floorId].floorName = cam.floorName;
+    }
   });
 
   // Within each floor, group by room
-  const floors = Object.entries(byFloor).map(([floorId, floorCameras]) => {
+  const floorEntries = Object.entries(byFloor);
+  const floors = floorEntries.map(([floorId, { cameras: floorCameras, floorName }], index) => {
     const byRoom = {};
     floorCameras.forEach((cam) => {
       const room = cam.room || cam.name || `Camera ${cam.id}`;
@@ -36,8 +45,17 @@ export function parseCameraData(json) {
       },
     }));
 
+    // Derive a human-readable floor name:
+    // 1. Use floorName from camera data if provided
+    // 2. If only one floor, just "All Rooms"
+    // 3. Otherwise "Floor 1", "Floor 2", etc.
+    const displayName =
+      floorName ||
+      (floorEntries.length === 1 ? 'All Rooms' : `Floor ${index + 1}`);
+
     return {
       floorId,
+      floorName: displayName,
       rooms,
       cameraCount: floorCameras.length,
     };
@@ -64,6 +82,7 @@ export function buildSurveyItems(parsedData) {
         id: `${floor.floorId}__${room.name}`,
         index: index++,
         floorId: floor.floorId,
+        floorName: floor.floorName,
         roomName: room.name,
         cameras: room.cameras.map((cam) => ({
           ...cam,
@@ -71,6 +90,7 @@ export function buildSurveyItems(parsedData) {
           newLatitude: null,
           newLongitude: null,
           repositioned: false,
+          repositionReason: null,
         })),
         center: room.center,
         // Survey fields

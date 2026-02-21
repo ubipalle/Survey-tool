@@ -1,11 +1,35 @@
 import React from 'react';
 
-export default function SurveyForm({ survey, onChange }) {
+/**
+ * Check which required fields are filled.
+ * Returns an object with field names and their filled status.
+ */
+export function getValidationState(survey) {
+  return {
+    ceilingHeight: !!survey.ceilingHeight,
+    mountingSurface: !!survey.mountingSurface,
+    networkConnectivity: !!survey.networkConnectivity,
+  };
+}
+
+/**
+ * Check if all required fields are filled.
+ */
+export function isFormValid(survey) {
+  const state = getValidationState(survey);
+  return Object.values(state).every(Boolean);
+}
+
+export default function SurveyForm({ survey, onChange, showValidation }) {
+  const validation = showValidation ? getValidationState(survey) : {};
+
   return (
     <div className="animate-in">
-      {/* Ceiling Height */}
+      {/* Ceiling Height — required */}
       <div className="form-group">
-        <label className="form-label">Ceiling Height</label>
+        <label className="form-label">
+          Ceiling Height <span style={{ color: 'var(--danger)', fontWeight: 400 }}>*</span>
+        </label>
         <div style={{ display: 'flex', gap: '8px' }}>
           <input
             type="number"
@@ -15,7 +39,12 @@ export default function SurveyForm({ survey, onChange }) {
             onChange={(e) => onChange('ceilingHeight', e.target.value)}
             step="0.1"
             min="0"
-            style={{ flex: 1 }}
+            style={{
+              flex: 1,
+              ...(showValidation && !validation.ceilingHeight
+                ? { borderColor: 'var(--danger)' }
+                : {}),
+            }}
           />
           <select
             className="form-select"
@@ -27,9 +56,14 @@ export default function SurveyForm({ survey, onChange }) {
             <option value="feet">feet</option>
           </select>
         </div>
+        {showValidation && !validation.ceilingHeight && (
+          <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: '4px' }}>
+            Required
+          </div>
+        )}
       </div>
 
-      {/* Power Outlet Location */}
+      {/* Power Outlet Location — optional */}
       <div className="form-group">
         <label className="form-label">Power Outlet Location</label>
         <select
@@ -48,13 +82,20 @@ export default function SurveyForm({ survey, onChange }) {
         <div className="form-hint">Nearest power source relative to planned camera mount</div>
       </div>
 
-      {/* Mounting Surface */}
+      {/* Mounting Surface — required */}
       <div className="form-group">
-        <label className="form-label">Mounting Surface</label>
+        <label className="form-label">
+          Mounting Surface <span style={{ color: 'var(--danger)', fontWeight: 400 }}>*</span>
+        </label>
         <select
           className="form-select"
           value={survey.mountingSurface}
           onChange={(e) => onChange('mountingSurface', e.target.value)}
+          style={
+            showValidation && !validation.mountingSurface
+              ? { borderColor: 'var(--danger)' }
+              : {}
+          }
         >
           <option value="">Select surface type...</option>
           <option value="drywall">Drywall / Plasterboard</option>
@@ -67,15 +108,27 @@ export default function SurveyForm({ survey, onChange }) {
           <option value="exposed-beam">Exposed Beam</option>
           <option value="other">Other</option>
         </select>
+        {showValidation && !validation.mountingSurface && (
+          <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: '4px' }}>
+            Required
+          </div>
+        )}
       </div>
 
-      {/* Network Connectivity */}
+      {/* Network Connectivity — required */}
       <div className="form-group">
-        <label className="form-label">Network Connectivity</label>
+        <label className="form-label">
+          Network Connectivity <span style={{ color: 'var(--danger)', fontWeight: 400 }}>*</span>
+        </label>
         <select
           className="form-select"
           value={survey.networkConnectivity}
           onChange={(e) => onChange('networkConnectivity', e.target.value)}
+          style={
+            showValidation && !validation.networkConnectivity
+              ? { borderColor: 'var(--danger)' }
+              : {}
+          }
         >
           <option value="">Select...</option>
           <option value="ethernet-nearby">Ethernet drop nearby</option>
@@ -85,9 +138,14 @@ export default function SurveyForm({ survey, onChange }) {
           <option value="no-network">No network available</option>
           <option value="poe-available">PoE switch available</option>
         </select>
+        {showValidation && !validation.networkConnectivity && (
+          <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: '4px' }}>
+            Required
+          </div>
+        )}
       </div>
 
-      {/* Obstructions */}
+      {/* Obstructions — optional */}
       <div className="form-group">
         <label className="form-label">Obstructions / Line of Sight Issues</label>
         <textarea
@@ -98,7 +156,7 @@ export default function SurveyForm({ survey, onChange }) {
         />
       </div>
 
-      {/* General Notes */}
+      {/* General Notes — optional */}
       <div className="form-group">
         <label className="form-label">Additional Notes</label>
         <textarea

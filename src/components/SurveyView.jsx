@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import SurveyForm from './SurveyForm';
+import SurveyForm, { isFormValid } from './SurveyForm';
 import PhotoCapture from './PhotoCapture';
 import RepositionModal from './RepositionModal';
 
@@ -15,6 +15,7 @@ export default function SurveyView({
 }) {
   const [activeTab, setActiveTab] = useState('form'); // 'form' or 'photos'
   const [repositionCamera, setRepositionCamera] = useState(null); // camera object or null
+  const [showValidation, setShowValidation] = useState(false);
 
   const handleSurveyChange = useCallback(
     (field, value) => {
@@ -29,6 +30,16 @@ export default function SurveyView({
   );
 
   const handleMarkComplete = useCallback(() => {
+    // If trying to mark complete, validate first
+    if (!item.survey.completed) {
+      if (!isFormValid(item.survey)) {
+        setShowValidation(true);
+        setActiveTab('form'); // Switch to form tab to show errors
+        return;
+      }
+    }
+
+    setShowValidation(false);
     onUpdate({
       survey: {
         ...item.survey,
@@ -102,7 +113,7 @@ export default function SurveyView({
             {item.roomName}
           </div>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-            Room {currentIndex} of {totalRooms} · {item.cameras.length} camera{item.cameras.length !== 1 ? 's' : ''}
+            Room {currentIndex} of {totalRooms} · {item.floorName || 'Floor'} · {item.cameras.length} camera{item.cameras.length !== 1 ? 's' : ''}
           </div>
         </div>
         {item.survey.completed && (
@@ -182,6 +193,13 @@ export default function SurveyView({
             onClick={() => setActiveTab('form')}
           >
             Survey Details
+            {showValidation && !isFormValid(item.survey) && (
+              <span style={{
+                marginLeft: '6px', width: '8px', height: '8px',
+                borderRadius: '50%', background: 'var(--danger)',
+                display: 'inline-block',
+              }} />
+            )}
           </button>
           <button
             className={`floor-tab ${activeTab === 'photos' ? 'floor-tab--active' : ''}`}
@@ -192,7 +210,11 @@ export default function SurveyView({
         </div>
 
         {activeTab === 'form' ? (
-          <SurveyForm survey={item.survey} onChange={handleSurveyChange} />
+          <SurveyForm
+            survey={item.survey}
+            onChange={handleSurveyChange}
+            showValidation={showValidation}
+          />
         ) : (
           <PhotoCapture
             photos={item.survey.photos}
