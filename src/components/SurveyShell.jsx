@@ -47,6 +47,22 @@ export default function SurveyShell({ config, surveyItems, onUpdateItem, onUpdat
   const total = surveyItems.length;
   const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
+  // Find the first ceiling height entered on the same floor as the selected room
+  const floorCeilingDefault = useMemo(() => {
+    if (!selectedItem) return null;
+    const sameFloorItems = surveyItems.filter(
+      (i) => i.floorId === selectedItem.floorId && i.id !== selectedItem.id
+    );
+    const withHeight = sameFloorItems.find((i) => i.survey.ceilingHeight);
+    if (withHeight) {
+      return {
+        height: withHeight.survey.ceilingHeight,
+        unit: withHeight.survey.ceilingHeightUnit,
+      };
+    }
+    return null;
+  }, [selectedItem, surveyItems]);
+
   const handleSelectRoom = (roomId) => {
     setSelectedRoomId(roomId);
     setShowRoomList(false);
@@ -60,7 +76,6 @@ export default function SurveyShell({ config, surveyItems, onUpdateItem, onUpdat
   // Navigate to next incomplete room
   const handleNextRoom = () => {
     const currentIndex = surveyItems.findIndex((i) => i.id === selectedRoomId);
-    // Find next incomplete room on same floor, then across floors
     const remaining = [
       ...surveyItems.slice(currentIndex + 1),
       ...surveyItems.slice(0, currentIndex),
@@ -70,7 +85,6 @@ export default function SurveyShell({ config, surveyItems, onUpdateItem, onUpdat
       setSelectedFloor(nextIncomplete.floorId);
       setSelectedRoomId(nextIncomplete.id);
     } else {
-      // All done — go to review
       onGoToReview();
     }
   };
@@ -87,6 +101,7 @@ export default function SurveyShell({ config, surveyItems, onUpdateItem, onUpdat
         onNext={handleNextRoom}
         currentIndex={surveyItems.findIndex((i) => i.id === selectedItem.id) + 1}
         totalRooms={total}
+        floorCeilingDefault={floorCeilingDefault}
       />
     );
   }

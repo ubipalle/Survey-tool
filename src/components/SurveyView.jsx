@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import SurveyForm, { isFormValid } from './SurveyForm';
 import PhotoCapture from './PhotoCapture';
 import RepositionModal from './RepositionModal';
@@ -12,10 +12,28 @@ export default function SurveyView({
   onNext,
   currentIndex,
   totalRooms,
+  floorCeilingDefault,
 }) {
   const [activeTab, setActiveTab] = useState('form'); // 'form' or 'photos'
   const [repositionCamera, setRepositionCamera] = useState(null); // camera object or null
   const [showValidation, setShowValidation] = useState(false);
+
+  // Auto-fill ceiling height from floor default when entering a room with no height set
+  useEffect(() => {
+    if (
+      floorCeilingDefault &&
+      !item.survey.ceilingHeight &&
+      !item.survey.completed
+    ) {
+      onUpdate({
+        survey: {
+          ...item.survey,
+          ceilingHeight: floorCeilingDefault.height,
+          ceilingHeightUnit: floorCeilingDefault.unit,
+        },
+      });
+    }
+  }, [item.id]); // Only run when switching rooms (item.id changes)
 
   const handleSurveyChange = useCallback(
     (field, value) => {
