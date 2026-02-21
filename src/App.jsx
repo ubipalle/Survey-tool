@@ -4,6 +4,7 @@ import SurveyShell from './components/SurveyShell';
 import ReviewScreen from './components/ReviewScreen';
 import { parseCameraData, buildSurveyItems } from './utils/cameraData';
 import { saveSurveyProgress, loadSurveyProgress, loadCredentials, saveCredentials } from './utils/storage';
+import { initGoogleAuth, signIn, signOut, isSignedIn, getUserInfo } from './utils/googleAuth';
 
 const SCREENS = {
   SETUP: 'setup',
@@ -17,10 +18,36 @@ export default function App() {
   const [surveyItems, setSurveyItems] = useState([]);
   const [surveyId, setSurveyId] = useState(null);
 
+  // Google auth state
+  const [googleUser, setGoogleUser] = useState(null);
+  const [googleReady, setGoogleReady] = useState(false);
+
   // Attempt to restore saved credentials
   const savedCredentials = loadCredentials();
 
-  const handleSetupComplete = useCallback(({ credentials, cameraJson, siteName }) => {
+  // Initialize Google Auth on mount
+  useEffect(() => {
+    initGoogleAuth().then(() => setGoogleReady(true));
+  }, []);
+
+  const handleGoogleSignIn = useCallback(async () => {
+    try {
+      await signIn();
+      const user = await getUserInfo();
+      setGoogleUser(user);
+      return true;
+    } catch (err) {
+      console.error('Google sign-in failed:', err);
+      return false;
+    }
+  }, []);
+
+  const handleGoogleSignOut = useCallback(() => {
+    signOut();
+    setGoogleUser(null);
+  }, []);
+
+  const handleSetupComplete = useCallback(({ credentials, cameraJson, siteName, gdriveProject }) => {
     // Save credentials for next time
     saveCredentials(credentials);
 
@@ -29,7 +56,7 @@ export default function App() {
     const items = buildSurveyItems(parsed);
     const id = `survey_${Date.now()}`;
 
-    setConfig({ credentials, cameraJson, siteName, parsed });
+    setConfig({ credentials, cameraJson, siteName, parsed, gdriveProject });
     setSurveyItems(items);
     setSurveyId(id);
     setScreen(SCREENS.SURVEY);
@@ -96,15 +123,34 @@ export default function App() {
         {config && (
           <span className="app-header__breadcrumb">{config.siteName}</span>
         )}
-        {screen !== SCREENS.SETUP && (
-          <div className="app-header__actions">
-            {screen === SCREENS.SURVEY && (
-              <button className="btn btn--sm btn--secondary" onClick={handleGoToReview}>
-                Review & Submit
+        <div className="app-header__actions">
+          {screen === SCREENS.SURVEY && (
+            <button className="btn btn--sm btn--secondary" onClick={handleGoToReview}>
+              Review & Submit
+            </button>
+          )}
+          {googleUser && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              fontSize: '0.75rem', color: 'var(--text-muted)',
+            }}>
+              {googleUser.picture && (
+                <img
+                  src={googleUser.picture}
+                  alt=""
+                  style={{ width: 24, height: 24, borderRadius: '50%' }}
+                />
+              )}
+              <button
+                className="btn btn--sm btn--secondary"
+                onClick={handleGoogleSignOut}
+                style={{ fontSize: '0.7rem', padding: '4px 8px' }}
+              >
+                Sign out
               </button>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </header>
 
       <div className="app-content">
@@ -112,6 +158,9 @@ export default function App() {
           <SetupScreen
             savedCredentials={savedCredentials}
             onComplete={handleSetupComplete}
+            googleUser={googleUser}
+            googleReady={googleReady}
+            onGoogleSignIn={handleGoogleSignIn}
           />
         )}
 

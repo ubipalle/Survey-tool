@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
 import { exportSurveyPayload } from '../utils/storage';
+import { uploadJsonFile, uploadPhoto } from '../utils/googleDrive';
+import { isSignedIn } from '../utils/googleAuth';
 
 export default function ReviewScreen({ config, surveyItems, onBack, onReset }) {
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
+  const [uploaded, setUploaded] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const completed = surveyItems.filter((i) => i.survey.completed).length;
   const total = surveyItems.length;
@@ -13,6 +19,9 @@ export default function ReviewScreen({ config, surveyItems, onBack, onReset }) {
     0
   );
   const totalCameras = surveyItems.reduce((s, i) => s + i.cameras.length, 0);
+
+  const hasGdrive = !!config.gdriveProject;
+  const signedIn = isSignedIn();
 
   const handleExportJSON = () => {
     const payload = exportSurveyPayload(surveyItems, {
@@ -31,21 +40,52 @@ export default function ReviewScreen({ config, surveyItems, onBack, onReset }) {
     setExported(true);
   };
 
-  const handleSubmitToHubSpot = async () => {
-    setExporting(true);
+  const handleUploadToGDrive = async () => {
+    if (!hasGdrive || !signedIn) return;
 
-    // TODO: Phase 2 — Implement HubSpot API integration
-    // 1. Upload photos to S3 with presigned URLs
-    // 2. Create HubSpot custom object records
-    // 3. Associate with deal/company
+    setUploading(true);
+    setUploadError('');
+    setUploadProgress('Preparing survey data...');
 
-    // For now, simulate
-    await new Promise((r) => setTimeout(r, 1500));
-    setExporting(false);
-    alert(
-      'HubSpot integration coming in Phase 2!\n\n' +
-        'For now, use "Export JSON" to download your survey data.'
-    );
+    try {
+      const { subfolders } = config.gdriveProject;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+      // 1. Upload survey JSON
+      setUploadProgress('Uploading survey data...');
+      const payload = exportSurveyPayload(surveyItems, {
+        surveyId: `survey_${Date.now()}`,
+        mapId: config.credentials.mapId,
+        siteName: config.siteName,
+      });
+
+      const jsonFilename = `survey_${dateStr}_${timestamp}.json`;
+      await uploadJsonFile(jsonFilename, payload, subfolders.surveys);
+
+      // 2. Upload photos
+      let photoCount = 0;
+      for (const item of surveyItems) {
+        for (let i = 0; i < item.survey.photos.length; i++) {
+          const photo = item.survey.photos[i];
+          photoCount++;
+          setUploadProgress(`Uploading photo ${photoCount} of ${totalPhotos}...`);
+
+          const roomSlug = item.roomName.replace(/\s+/g, '-').toLowerCase();
+          const photoFilename = `${dateStr}_${roomSlug}_${photo.label || 'photo'}_${i + 1}.jpg`;
+
+          await uploadPhoto(photoFilename, photo.dataUrl, subfolders.photos);
+        }
+      }
+
+      setUploadProgress('');
+      setUploaded(true);
+    } catch (err) {
+      console.error('GDrive upload error:', err);
+      setUploadError(err.message);
+      setUploadProgress('');
+    }
+    setUploading(false);
   };
 
   return (
@@ -145,16 +185,69 @@ export default function ReviewScreen({ config, surveyItems, onBack, onReset }) {
 
       {/* Action Buttons */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-        <button className="btn btn--primary btn--lg btn--block" onClick={handleExportJSON}>
-          {exported ? '✓ Downloaded' : 'Export as JSON'}
-        </button>
 
+        {/* Google Drive Upload — primary action if connected */}
+        {hasGdrive && signedIn ? (
+          <button
+            className={`btn btn--lg btn--block ${uploaded ? 'btn--success' : 'btn--primary'}`}
+            onClick={handleUploadToGDrive}
+            disabled={uploading || uploaded}
+          >
+            {uploaded ? (
+              <>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                Uploaded to Google Drive
+              </>
+            ) : uploading ? (
+              <>
+                <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
+                {uploadProgress}
+              </>
+            ) : (
+              <>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                Upload to Google Drive
+              </>
+            )}
+          </button>
+        ) : null}
+
+        {/* Upload destination info */}
+        {hasGdrive && signedIn && !uploaded && !uploading && (
+          <div style={{
+            fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center',
+            fontFamily: 'var(--font-mono)', padding: '0 8px',
+          }}>
+            → {config.gdriveProject.projectName}/Surveys/
+          </div>
+        )}
+
+        {/* Upload error */}
+        {uploadError && (
+          <div style={{
+            padding: '10px 14px',
+            background: 'var(--danger-bg)',
+            border: '1px solid var(--danger)',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--danger)',
+            fontSize: '0.85rem',
+          }}>
+            Upload failed: {uploadError}
+          </div>
+        )}
+
+        {/* JSON download — always available */}
         <button
-          className="btn btn--secondary btn--lg btn--block"
-          onClick={handleSubmitToHubSpot}
-          disabled={exporting}
+          className={`btn btn--block ${hasGdrive && signedIn ? 'btn--secondary' : 'btn--primary btn--lg'}`}
+          onClick={handleExportJSON}
         >
-          {exporting ? 'Submitting...' : 'Submit to HubSpot (Phase 2)'}
+          {exported ? '✓ JSON Downloaded' : 'Download JSON'}
         </button>
 
         <button className="btn btn--secondary btn--block" onClick={onBack}>
