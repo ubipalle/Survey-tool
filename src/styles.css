@@ -1,35 +1,44 @@
 /* ===========================
    Site Survey Tool — Styles
+   Light theme, matching main app design
    Mobile-first, field-ready UI
    =========================== */
 
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
 :root {
-  --bg-primary: #0f1117;
-  --bg-secondary: #1a1d27;
-  --bg-card: #222639;
-  --bg-input: #2a2e42;
-  --bg-hover: #2e3350;
-  --border: #363b54;
-  --border-focus: #5b8def;
-  --text-primary: #e8eaf0;
-  --text-secondary: #9399b2;
-  --text-muted: #636985;
-  --accent: #5b8def;
-  --accent-hover: #4a7de0;
-  --accent-glow: rgba(91, 141, 239, 0.15);
-  --success: #34d399;
-  --success-bg: rgba(52, 211, 153, 0.1);
-  --warning: #fbbf24;
-  --warning-bg: rgba(251, 191, 36, 0.1);
-  --danger: #f87171;
-  --danger-bg: rgba(248, 113, 113, 0.1);
+  --bg-primary: #fafafa;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-input: #f5f5f5;
+  --bg-hover: #f0f0f0;
+  --bg-sidebar: #ffffff;
+  --border: #e8e8e8;
+  --border-focus: #d4a843;
+  --text-primary: #1a1a1a;
+  --text-secondary: #6b6b6b;
+  --text-muted: #9e9e9e;
+  --accent: #d4a843;
+  --accent-hover: #c49a3a;
+  --accent-light: rgba(212, 168, 67, 0.1);
+  --accent-glow: rgba(212, 168, 67, 0.12);
+  --success: #34a853;
+  --success-bg: rgba(52, 168, 83, 0.08);
+  --warning: #e8a020;
+  --warning-bg: rgba(232, 160, 32, 0.08);
+  --danger: #d93025;
+  --danger-bg: rgba(217, 48, 37, 0.08);
+  --teal: #26a69a;
+  --teal-bg: rgba(38, 166, 154, 0.08);
+  --coral: #e07060;
+  --coral-bg: rgba(224, 112, 96, 0.08);
   --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
-  --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
 
@@ -80,19 +89,19 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 14px 20px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(12px);
 }
 
 .app-header__logo {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 1rem;
   letter-spacing: -0.01em;
+  color: var(--text-primary);
 }
 
 .app-header__logo svg {
@@ -127,7 +136,7 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16px;
+  padding: 20px;
   max-width: 600px;
   width: 100%;
   margin: 0 auto;
@@ -139,9 +148,10 @@ body {
 
 .screen__title {
   font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  letter-spacing: -0.025em;
   margin-bottom: 4px;
+  color: var(--text-primary);
 }
 
 .screen__subtitle {
@@ -160,6 +170,7 @@ body {
   border-radius: var(--radius-lg);
   padding: 20px;
   margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
 }
 
 .card__label {
@@ -168,7 +179,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 /* ===========================
@@ -182,7 +193,7 @@ body {
 .form-label {
   display: block;
   font-size: 0.8rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 6px;
 }
@@ -205,8 +216,9 @@ body {
 .form-select:focus,
 .form-textarea:focus {
   outline: none;
-  border-color: var(--border-focus);
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
+  background: var(--bg-secondary);
 }
 
 .form-input::placeholder,
@@ -266,11 +278,12 @@ body {
 
 .btn--secondary:hover {
   background: var(--bg-hover);
+  border-color: #d0d0d0;
 }
 
 .btn--success {
   background: var(--success);
-  color: #0f1117;
+  color: #fff;
 }
 
 .btn--danger {
@@ -301,7 +314,7 @@ body {
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -325,16 +338,17 @@ body {
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.15s;
+  box-shadow: var(--shadow-sm);
 }
 
 .room-item:hover {
-  background: var(--bg-hover);
   border-color: var(--accent);
+  box-shadow: var(--shadow-md);
 }
 
 .room-item--active {
   border-color: var(--accent);
-  background: var(--accent-glow);
+  background: var(--accent-light);
 }
 
 .room-item--complete {
@@ -361,7 +375,7 @@ body {
 
 .room-item__status--complete {
   background: var(--success);
-  color: #0f1117;
+  color: #fff;
 }
 
 .room-item__info {
@@ -375,6 +389,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--text-primary);
 }
 
 .room-item__meta {
@@ -386,153 +401,7 @@ body {
 .room-item__cameras {
   font-size: 0.75rem;
   color: var(--text-secondary);
-  background: var(--bg-input);
-  padding: 2px 8px;
-  border-radius: 99px;
   flex-shrink: 0;
-}
-
-/* ===========================
-   Survey View — Split Layout
-   =========================== */
-
-.survey-layout {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.survey-map-container {
-  position: relative;
-  height: 45vh;
-  min-height: 250px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-}
-
-.survey-map-container__inner {
-  width: 100%;
-  height: 100%;
-}
-
-.survey-map-overlay {
-  position: absolute;
-  bottom: 12px;
-  left: 12px;
-  right: 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  pointer-events: none;
-}
-
-.survey-map-overlay > * {
-  pointer-events: auto;
-}
-
-.survey-form-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-/* ===========================
-   Camera Marker
-   =========================== */
-
-.camera-marker {
-  width: 36px;
-  height: 36px;
-  background: var(--accent);
-  border: 3px solid #fff;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-  cursor: grab;
-  transition: transform 0.15s;
-}
-
-.camera-marker:hover {
-  transform: scale(1.15);
-}
-
-.camera-marker svg {
-  width: 18px;
-  height: 18px;
-  color: #fff;
-}
-
-.camera-marker--repositioned {
-  background: var(--warning);
-}
-
-/* ===========================
-   Photo Grid
-   =========================== */
-
-.photo-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.photo-grid__item {
-  aspect-ratio: 1;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  position: relative;
-  border: 1px solid var(--border);
-}
-
-.photo-grid__item img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.photo-grid__remove {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.7);
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-}
-
-.photo-grid__add {
-  aspect-ratio: 1;
-  border: 2px dashed var(--border);
-  border-radius: var(--radius-sm);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  cursor: pointer;
-  color: var(--text-muted);
-  font-size: 0.7rem;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.photo-grid__add:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.photo-grid__add svg {
-  width: 24px;
-  height: 24px;
 }
 
 /* ===========================
@@ -564,6 +433,7 @@ body {
 
 .floor-tab:hover {
   color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
 .floor-tab--active {
@@ -592,7 +462,7 @@ body {
 
 .progress__fill {
   height: 100%;
-  background: var(--success);
+  background: var(--accent);
   border-radius: 99px;
   transition: width 0.3s ease;
 }
@@ -650,21 +520,83 @@ body {
 }
 
 /* ===========================
+   Photo Grid
+   =========================== */
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.photo-grid__item {
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border);
+}
+
+.photo-grid__item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-grid__remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+}
+
+.photo-grid__add {
+  aspect-ratio: 1;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.photo-grid__add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.photo-grid__add svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* ===========================
    Animations
    =========================== */
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-in {
-  animation: fadeIn 0.3s ease forwards;
+  animation: fadeIn 0.25s ease forwards;
 }
 
 /* ===========================
@@ -681,8 +613,8 @@ body {
 }
 
 .spinner {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border: 3px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
@@ -717,7 +649,7 @@ body {
   width: 48px;
   height: 48px;
   margin-bottom: 16px;
-  opacity: 0.4;
+  opacity: 0.3;
 }
 
 /* ===========================
@@ -725,20 +657,7 @@ body {
    =========================== */
 
 @media (min-width: 768px) {
-  .survey-layout {
-    flex-direction: row;
-  }
-
-  .survey-map-container {
-    flex: 1;
-    height: auto;
-    min-height: auto;
-    border-bottom: none;
-    border-right: 1px solid var(--border);
-  }
-
-  .survey-form-container {
-    width: 380px;
-    flex-shrink: 0;
+  .screen {
+    padding: 28px;
   }
 }

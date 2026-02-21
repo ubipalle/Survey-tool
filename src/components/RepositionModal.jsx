@@ -65,7 +65,7 @@ export default function RepositionModal({ credentials, floorId, camera, onConfir
           mapView.setFloor(targetFloor);
         }
 
-        // Place current camera marker (blue)
+        // Place current camera marker (accent gold)
         const currentLat = camera.newLatitude || camera.latitude;
         const currentLng = camera.newLongitude || camera.longitude;
         const coord = mapView.createCoordinate(currentLat, currentLng, targetFloor);
@@ -76,11 +76,11 @@ export default function RepositionModal({ credentials, floorId, camera, onConfir
           ">
             <div style="
               width: 40px; height: 40px;
-              background: #5b8def;
+              background: #d4a843;
               border: 3px solid #fff;
               border-radius: 50%;
               display: flex; align-items: center; justify-content: center;
-              box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+              box-shadow: 0 2px 10px rgba(0,0,0,0.2);
             ">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -88,7 +88,7 @@ export default function RepositionModal({ credentials, floorId, camera, onConfir
               </svg>
             </div>
             <div style="
-              background: rgba(0,0,0,0.75); color: #fff;
+              background: rgba(0,0,0,0.65); color: #fff;
               padding: 2px 8px; border-radius: 4px;
               font-size: 11px; font-family: sans-serif; white-space: nowrap;
             ">Current position</div>
@@ -127,7 +127,7 @@ export default function RepositionModal({ credentials, floorId, camera, onConfir
             try { mapView.Markers.remove(markerRef.current); } catch {}
           }
 
-          // Place new marker (yellow/orange)
+          // Place new marker (teal)
           const newCoord = mapView.createCoordinate(lat, lng, targetFloor);
           const newMarkerHTML = `
             <div style="
@@ -135,12 +135,11 @@ export default function RepositionModal({ credentials, floorId, camera, onConfir
             ">
               <div style="
                 width: 40px; height: 40px;
-                background: #f59e0b;
+                background: #26a69a;
                 border: 3px solid #fff;
                 border-radius: 50%;
                 display: flex; align-items: center; justify-content: center;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-                animation: pulse 1.5s ease-in-out infinite;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
               ">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -148,7 +147,7 @@ export default function RepositionModal({ credentials, floorId, camera, onConfir
                 </svg>
               </div>
               <div style="
-                background: rgba(245,158,11,0.9); color: #fff;
+                background: #26a69a; color: #fff;
                 padding: 2px 8px; border-radius: 4px;
                 font-size: 11px; font-family: sans-serif; white-space: nowrap;
                 font-weight: 600;
@@ -205,7 +204,7 @@ export default function RepositionModal({ credentials, floorId, camera, onConfir
           Cancel
         </button>
         <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>Reposition Camera</div>
+          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>Reposition Camera</div>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
             {(camera.name || camera.id).slice(0, 30)}
           </div>
@@ -223,12 +222,12 @@ export default function RepositionModal({ credentials, floorId, camera, onConfir
       {/* Instruction banner */}
       <div style={{
         padding: '10px 16px',
-        background: 'var(--accent-glow)',
+        background: 'var(--accent-light)',
         borderBottom: '1px solid var(--border)',
         fontSize: '0.8rem',
-        color: 'var(--accent)',
+        color: 'var(--accent-hover)',
         textAlign: 'center',
-        fontWeight: 500,
+        fontWeight: 600,
       }}>
         {newPosition
           ? '✓ New position selected — tap elsewhere to change, or confirm above'
@@ -241,7 +240,7 @@ export default function RepositionModal({ credentials, floorId, camera, onConfir
           <div style={{
             position: 'absolute', inset: 0, zIndex: 10,
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', background: 'var(--bg-secondary)',
+            justifyContent: 'center', background: 'var(--bg-primary)',
           }}>
             <div className="spinner" />
             <div className="loading-text" style={{ marginTop: '12px' }}>Loading map...</div>
@@ -272,16 +271,16 @@ export default function RepositionModal({ credentials, floorId, camera, onConfir
         <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{
             width: '12px', height: '12px', borderRadius: '50%',
-            background: '#5b8def', border: '2px solid #fff',
-            display: 'inline-block',
+            background: '#d4a843', border: '2px solid #fff',
+            display: 'inline-block', boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
           }} />
           Current
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{
             width: '12px', height: '12px', borderRadius: '50%',
-            background: '#f59e0b', border: '2px solid #fff',
-            display: 'inline-block',
+            background: '#26a69a', border: '2px solid #fff',
+            display: 'inline-block', boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
           }} />
           New position
         </span>

@@ -96,6 +96,7 @@ export default function SurveyView({
           <div style={{
             fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.01em',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            color: 'var(--text-primary)',
           }}>
             {item.roomName}
           </div>
@@ -126,7 +127,7 @@ export default function SurveyView({
               {/* Camera icon */}
               <div style={{
                 width: 36, height: 36, borderRadius: '50%',
-                background: cam.repositioned ? 'var(--warning)' : 'var(--accent)',
+                background: cam.repositioned ? 'var(--teal)' : 'var(--accent)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0,
               }}>
@@ -138,13 +139,13 @@ export default function SurveyView({
 
               {/* Camera info */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                   {cam.name || cam.id}
                 </div>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                   {cam.mountType} · {cam.height}m
                   {cam.repositioned && (
-                    <span style={{ color: 'var(--warning)', marginLeft: '6px' }}>· Repositioned</span>
+                    <span style={{ color: 'var(--teal)', marginLeft: '6px' }}>· Repositioned</span>
                   )}
                 </div>
               </div>
