@@ -17,6 +17,7 @@ export default function App() {
   const [config, setConfig] = useState(null);
   const [surveyItems, setSurveyItems] = useState([]);
   const [surveyId, setSurveyId] = useState(null);
+  const [jumpToRoomId, setJumpToRoomId] = useState(null);
 
   // Google auth state
   const [googleUser, setGoogleUser] = useState(null);
@@ -91,6 +92,12 @@ export default function App() {
   }, []);
 
   const handleBackToSurvey = useCallback(() => {
+    setJumpToRoomId(null);
+    setScreen(SCREENS.SURVEY);
+  }, []);
+
+  const handleGoToRoom = useCallback((roomId) => {
+    setJumpToRoomId(roomId);
     setScreen(SCREENS.SURVEY);
   }, []);
 
@@ -98,6 +105,7 @@ export default function App() {
     setConfig(null);
     setSurveyItems([]);
     setSurveyId(null);
+    setJumpToRoomId(null);
     setScreen(SCREENS.SETUP);
   }, []);
 
@@ -171,6 +179,8 @@ export default function App() {
             onUpdateItem={handleUpdateSurveyItem}
             onUpdateCamera={handleUpdateCamera}
             onGoToReview={handleGoToReview}
+            jumpToRoomId={jumpToRoomId}
+            onJumpHandled={() => setJumpToRoomId(null)}
           />
         )}
 
@@ -179,6 +189,7 @@ export default function App() {
             config={config}
             surveyItems={surveyItems}
             onBack={handleBackToSurvey}
+            onGoToRoom={handleGoToRoom}
             onReset={handleReset}
           />
         )}

@@ -3,7 +3,7 @@ import { exportSurveyPayload } from '../utils/storage';
 import { uploadJsonFile, uploadPhoto } from '../utils/googleDrive';
 import { isSignedIn } from '../utils/googleAuth';
 
-export default function ReviewScreen({ config, surveyItems, onBack, onReset }) {
+export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, onReset }) {
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -19,6 +19,7 @@ export default function ReviewScreen({ config, surveyItems, onBack, onReset }) {
     0
   );
   const totalCameras = surveyItems.reduce((s, i) => s + i.cameras.length, 0);
+  const incompleteItems = surveyItems.filter((i) => !i.survey.completed);
 
   const hasGdrive = !!config.gdriveProject;
   const signedIn = isSignedIn();
@@ -120,68 +121,84 @@ export default function ReviewScreen({ config, surveyItems, onBack, onReset }) {
         </div>
       </div>
 
-      {/* Incomplete Rooms Warning */}
-      {completed < total && (
-        <div
-          style={{
-            padding: '12px 16px',
-            background: 'var(--warning-bg)',
-            border: '1px solid var(--warning)',
-            borderRadius: 'var(--radius-md)',
-            marginBottom: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-          }}
-        >
-          <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-          <div>
-            <div style={{ fontSize: '0.85rem', color: 'var(--warning)', fontWeight: 600 }}>
-              {total - completed} room{total - completed !== 1 ? 's' : ''} incomplete
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              You can still export, but these rooms won't have survey data.
-            </div>
+      {/* Incomplete Rooms Warning + clickable list */}
+      {incompleteItems.length > 0 && (
+        <div className="card" style={{ borderColor: 'var(--warning)' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            marginBottom: '12px',
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--warning)' }}>
+              {incompleteItems.length} room{incompleteItems.length !== 1 ? 's' : ''} incomplete
+            </span>
+          </div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+            Tap a room to go back and complete the survey:
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {incompleteItems.map((item) => (
+              <button
+                key={item.id}
+                className="btn btn--secondary"
+                style={{
+                  justifyContent: 'flex-start', gap: '10px',
+                  padding: '10px 14px',
+                }}
+                onClick={() => onGoToRoom(item.id)}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+                <span style={{ flex: 1, textAlign: 'left' }}>{item.roomName}</span>
+                <span style={{
+                  fontSize: '0.7rem', color: 'var(--text-muted)',
+                  fontFamily: 'var(--font-mono)',
+                }}>
+                  {item.cameras.length} cam · {item.survey.photos.length} photos
+                </span>
+              </button>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Room-by-Room Breakdown */}
-      <div className="card">
-        <div className="card__label">Room Details</div>
-        {surveyItems.map((item) => (
-          <div
-            key={item.id}
-            style={{
-              padding: '10px 0',
-              borderBottom: '1px solid var(--border)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-            }}
-          >
+      {/* Completed Room Breakdown */}
+      {completed > 0 && (
+        <div className="card">
+          <div className="card__label">Completed Rooms</div>
+          {surveyItems.filter((i) => i.survey.completed).map((item) => (
             <div
-              className={`room-item__status ${
-                item.survey.completed ? 'room-item__status--complete' : 'room-item__status--pending'
-              }`}
+              key={item.id}
+              style={{
+                padding: '10px 0',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                cursor: 'pointer',
+              }}
+              onClick={() => onGoToRoom(item.id)}
             >
-              {item.survey.completed ? '✓' : '—'}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{item.roomName}</div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                {item.cameras.length} cam · {item.survey.photos.length} photo{item.survey.photos.length !== 1 ? 's' : ''}
-                {item.survey.ceilingHeight && ` · ${item.survey.ceilingHeight}${item.survey.ceilingHeightUnit === 'meters' ? 'm' : 'ft'}`}
+              <div className="room-item__status room-item__status--complete">✓</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{item.roomName}</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                  {item.cameras.length} cam · {item.survey.photos.length} photo{item.survey.photos.length !== 1 ? 's' : ''}
+                  {item.survey.ceilingHeight && ` · ${item.survey.ceilingHeight}${item.survey.ceilingHeightUnit === 'meters' ? 'm' : 'ft'}`}
+                </div>
               </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
             </div>
-            {item.survey.completed ? (
-              <span className="badge badge--success">Complete</span>
-            ) : (
-              <span className="badge badge--pending">Incomplete</span>
-            )}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
@@ -250,8 +267,12 @@ export default function ReviewScreen({ config, surveyItems, onBack, onReset }) {
           {exported ? '✓ JSON Downloaded' : 'Download JSON'}
         </button>
 
+        {/* Back to survey — prominent */}
         <button className="btn btn--secondary btn--block" onClick={onBack}>
-          ← Back to Survey
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          Back to Room List
         </button>
 
         <button

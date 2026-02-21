@@ -1,11 +1,24 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import RoomList from './RoomList';
 import SurveyView from './SurveyView';
 
-export default function SurveyShell({ config, surveyItems, onUpdateItem, onUpdateCamera, onGoToReview }) {
+export default function SurveyShell({ config, surveyItems, onUpdateItem, onUpdateCamera, onGoToReview, jumpToRoomId, onJumpHandled }) {
   const [selectedFloor, setSelectedFloor] = useState(null);
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [showRoomList, setShowRoomList] = useState(true);
+
+  // Handle jump-to-room from Review screen
+  useEffect(() => {
+    if (jumpToRoomId) {
+      const targetItem = surveyItems.find((i) => i.id === jumpToRoomId);
+      if (targetItem) {
+        setSelectedFloor(targetItem.floorId);
+        setSelectedRoomId(jumpToRoomId);
+        setShowRoomList(false);
+      }
+      if (onJumpHandled) onJumpHandled();
+    }
+  }, [jumpToRoomId]);
 
   // Get unique floors
   const floors = useMemo(() => {
