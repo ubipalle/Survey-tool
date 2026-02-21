@@ -55,33 +55,45 @@ export async function findCustomerProjectsDrive(name = 'Customer projects') {
 // ─── FOLDERS ───
 
 /**
- * List folders inside a parent folder on a shared drive.
+ * List ALL folders inside a parent folder on a shared drive.
+ * Handles pagination to retrieve every folder.
  * @param {string} parentId - The parent folder ID (or shared drive ID for root)
  * @param {string} driveId - The shared drive ID
  */
 export async function listFolders(parentId, driveId) {
   const q = `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-  const params = new URLSearchParams({
-    q,
-    fields: 'files(id,name,createdTime)',
-    orderBy: 'name',
-    pageSize: '200',
-    supportsAllDrives: 'true',
-    includeItemsFromAllDrives: 'true',
-    corpora: 'drive',
-    driveId,
-  });
+  let allFiles = [];
+  let pageToken = null;
 
-  const data = await driveRequest(`${DRIVE_API}/files?${params}`);
-  return data.files || [];
+  do {
+    const params = new URLSearchParams({
+      q,
+      fields: 'nextPageToken,files(id,name,createdTime)',
+      orderBy: 'name',
+      pageSize: '1000',
+      supportsAllDrives: 'true',
+      includeItemsFromAllDrives: 'true',
+      corpora: 'drive',
+      driveId,
+    });
+
+    if (pageToken) {
+      params.set('pageToken', pageToken);
+    }
+
+    const data = await driveRequest(`${DRIVE_API}/files?${params}`);
+    allFiles = allFiles.concat(data.files || []);
+    pageToken = data.nextPageToken || null;
+  } while (pageToken);
+
+  return allFiles;
 }
 
 /**
- * List project folders (matching "{code} - {name}" pattern) from the shared drive root.
+ * List project folders from the shared drive root.
  */
 export async function listProjectFolders(driveId) {
   const folders = await listFolders(driveId, driveId);
-  // Return all folders — they should follow the naming convention
   return folders;
 }
 
