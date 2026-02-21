@@ -4,7 +4,7 @@
  */
 
 const CLIENT_ID = '277420573351-e928i3ea0fbdttcsdoau90mnc45l9fr7.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly';
+const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly';
 
 let tokenClient = null;
 let accessToken = null;
@@ -35,23 +35,14 @@ function loadGisScript() {
 export async function initGoogleAuth() {
   await loadGisScript();
 
-  return new Promise((resolve) => {
-    tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: SCOPES,
-      callback: (response) => {
-        if (response.error) {
-          resolve({ success: false, error: response.error });
-          return;
-        }
-        accessToken = response.access_token;
-        // Token typically expires in 3600 seconds
-        tokenExpiry = Date.now() + (response.expires_in || 3600) * 1000;
-        resolve({ success: true, token: accessToken });
-      },
-    });
-    resolve({ success: true, initialized: true });
+  // Just create the client — callback will be set per signIn() call
+  tokenClient = window.google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: () => {}, // placeholder, overridden by signIn()
   });
+
+  return { success: true };
 }
 
 /**
@@ -65,25 +56,27 @@ export function signIn() {
       return;
     }
 
-    // Override the callback for this specific sign-in request
-    tokenClient.callback = (response) => {
-      if (response.error) {
-        reject(new Error(response.error_description || response.error));
-        return;
-      }
-      accessToken = response.access_token;
-      tokenExpiry = Date.now() + (response.expires_in || 3600) * 1000;
-      resolve(accessToken);
-    };
-
     // If we already have a valid token, return it
     if (accessToken && tokenExpiry && Date.now() < tokenExpiry - 60000) {
       resolve(accessToken);
       return;
     }
 
+    // Set the callback for this sign-in request
+    tokenClient.callback = (response) => {
+      if (response.error) {
+        console.error('Google OAuth error:', response);
+        reject(new Error(response.error_description || response.error));
+        return;
+      }
+      accessToken = response.access_token;
+      tokenExpiry = Date.now() + (response.expires_in || 3600) * 1000;
+      console.log('Google sign-in successful, token received');
+      resolve(accessToken);
+    };
+
     // Request a new token (shows popup)
-    tokenClient.requestAccessToken({ prompt: '' });
+    tokenClient.requestAccessToken({ prompt: 'consent' });
   });
 }
 
@@ -109,7 +102,11 @@ export function isSignedIn() {
  */
 export function signOut() {
   if (accessToken) {
-    window.google?.accounts?.oauth2?.revoke(accessToken);
+    try {
+      window.google?.accounts?.oauth2?.revoke(accessToken);
+    } catch (e) {
+      console.warn('Token revoke failed:', e);
+    }
   }
   accessToken = null;
   tokenExpiry = null;
@@ -120,12 +117,26 @@ export function signOut() {
  */
 export async function getUserInfo() {
   const token = getAccessToken();
-  if (!token) return null;
+  if (!token) {
+    console.warn('getUserInfo called without valid token');
+    return null;
+  }
 
-  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  try {
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
-  if (!res.ok) return null;
-  return res.json(); // { sub, name, email, picture, ... }
+    if (!res.ok) {
+      console.error('getUserInfo failed:', res.status);
+      return null;
+    }
+
+    const data = await res.json();
+    console.log('User info retrieved:', data.email);
+    return data; // { sub, name, email, picture, ... }
+  } catch (err) {
+    console.error('getUserInfo error:', err);
+    return null;
+  }
 }
