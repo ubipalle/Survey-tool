@@ -18,10 +18,25 @@ export default function App() {
   const [surveyItems, setSurveyItems] = useState([]);
   const [surveyId, setSurveyId] = useState(null);
   const [jumpToRoomId, setJumpToRoomId] = useState(null);
+  const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'offline'
 
   // Google auth state
   const [googleUser, setGoogleUser] = useState(null);
   const [googleReady, setGoogleReady] = useState(false);
+
+  // Online/offline state
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Attempt to restore saved credentials
   const savedCredentials = loadCredentials();
@@ -109,14 +124,16 @@ export default function App() {
     setScreen(SCREENS.SETUP);
   }, []);
 
-  // Auto-save progress periodically
+  // Auto-save progress periodically (now async with IndexedDB)
   useEffect(() => {
     if (!surveyId || surveyItems.length === 0) return;
-    const timer = setTimeout(() => {
-      saveSurveyProgress(surveyId, { items: surveyItems, config });
+    setSaveStatus('saving');
+    const timer = setTimeout(async () => {
+      await saveSurveyProgress(surveyId, { items: surveyItems, config });
+      setSaveStatus(isOnline ? 'saved' : 'offline');
     }, 2000);
     return () => clearTimeout(timer);
-  }, [surveyItems, surveyId, config]);
+  }, [surveyItems, surveyId, config, isOnline]);
 
   return (
     <div className="app-shell">
@@ -132,6 +149,44 @@ export default function App() {
           <span className="app-header__breadcrumb">{config.siteName}</span>
         )}
         <div className="app-header__actions">
+          {/* Save/Offline status indicator */}
+          {screen !== SCREENS.SETUP && (
+            <div className={`status-indicator ${!isOnline ? 'status-indicator--offline' : ''}`}
+              title={
+                !isOnline ? 'Offline — data saved locally'
+                : saveStatus === 'saving' ? 'Saving...'
+                : 'All changes saved'
+              }
+            >
+              {!isOnline ? (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                    <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+                    <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+                    <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
+                    <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                    <line x1="12" y1="20" x2="12.01" y2="20" />
+                  </svg>
+                  <span>Offline</span>
+                </>
+              ) : saveStatus === 'saving' ? (
+                <>
+                  <div className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} />
+                  <span>Saving</span>
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Saved</span>
+                </>
+              )}
+            </div>
+          )}
+
           {screen === SCREENS.SURVEY && (
             <button className="btn btn--sm btn--secondary" onClick={handleGoToReview}>
               Review & Submit
@@ -191,6 +246,7 @@ export default function App() {
             onBack={handleBackToSurvey}
             onGoToRoom={handleGoToRoom}
             onReset={handleReset}
+            isOnline={isOnline}
           />
         )}
       </div>

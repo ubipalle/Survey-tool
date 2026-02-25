@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { exportSurveyPayload } from '../utils/storage';
+import { exportSurveyPayload, queuePendingUpload } from '../utils/storage';
 import { uploadJsonFile, uploadPhoto } from '../utils/googleDrive';
 import { isSignedIn } from '../utils/googleAuth';
 
@@ -19,12 +19,10 @@ function haversineDistance(lat1, lng1, lat2, lng2) {
 
 /**
  * Build the updated camera placements JSON.
- * Same format as the original input, but with coordinates updated for repositioned cameras.
  */
 function buildUpdatedPlacements(originalCameraJson, surveyItems) {
   if (!originalCameraJson?.cameras) return null;
 
-  // Collect all camera updates from survey items
   const cameraUpdates = {};
   for (const item of surveyItems) {
     for (const cam of item.cameras) {
@@ -34,7 +32,6 @@ function buildUpdatedPlacements(originalCameraJson, surveyItems) {
     }
   }
 
-  // Apply updates to a copy of the original
   const updatedCameras = originalCameraJson.cameras.map((cam) => {
     const update = cameraUpdates[cam.id];
     if (!update) return { ...cam };
@@ -49,7 +46,7 @@ function buildUpdatedPlacements(originalCameraJson, surveyItems) {
 }
 
 /**
- * Build the camera changes array for inclusion in the survey JSON.
+ * Build the camera changes array.
  */
 function buildCameraChanges(originalCameraJson, surveyItems) {
   if (!originalCameraJson?.cameras) return [];
@@ -86,13 +83,14 @@ function buildCameraChanges(originalCameraJson, surveyItems) {
   return changes;
 }
 
-export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, onReset }) {
+export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, onReset, isOnline }) {
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [uploaded, setUploaded] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [queued, setQueued] = useState(false);
 
   const completed = surveyItems.filter((i) => i.survey.completed).length;
   const total = surveyItems.length;
@@ -107,7 +105,6 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
   const hasGdrive = !!config.gdriveProject;
   const signedIn = isSignedIn();
 
-  // Build camera changes for display
   const cameraChanges = buildCameraChanges(config.cameraJson, surveyItems);
 
   const buildPayload = () => {
@@ -137,6 +134,25 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
     a.click();
     URL.revokeObjectURL(url);
     setExported(true);
+  };
+
+  const handleQueueUpload = async () => {
+    const payload = buildPayload();
+    const success = await queuePendingUpload({
+      payload,
+      surveyItems,
+      config: {
+        siteName: config.siteName,
+        gdriveProject: config.gdriveProject,
+        cameraJson: config.cameraJson,
+        credentials: { mapId: config.credentials.mapId },
+      },
+      repositioned,
+      totalPhotos,
+    });
+    if (success) {
+      setQueued(true);
+    }
   };
 
   const handleUploadToGDrive = async () => {
@@ -201,6 +217,31 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
       <h1 className="screen__title">Survey Review</h1>
       <p className="screen__subtitle">{config.siteName}</p>
 
+      {/* Offline Banner */}
+      {!isOnline && (
+        <div style={{
+          padding: '10px 14px',
+          background: 'color-mix(in srgb, var(--warning) 10%, transparent)',
+          border: '1px solid var(--warning)',
+          borderRadius: 'var(--radius-md)',
+          display: 'flex', alignItems: 'center', gap: '8px',
+          marginBottom: '12px',
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="1" y1="1" x2="23" y2="23" />
+            <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+            <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+            <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
+            <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+            <line x1="12" y1="20" x2="12.01" y2="20" />
+          </svg>
+          <div style={{ flex: 1, fontSize: '0.8rem', color: 'var(--warning)' }}>
+            <strong>You're offline.</strong> Your survey is saved locally. You can queue the upload for when you're back online.
+          </div>
+        </div>
+      )}
+
       {/* Summary Stats */}
       <div className="card">
         <div className="card__label">Summary</div>
@@ -228,7 +269,7 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
         </div>
       </div>
 
-      {/* Incomplete Rooms Warning + clickable list */}
+      {/* Incomplete Rooms Warning */}
       {incompleteItems.length > 0 && (
         <div className="card" style={{ borderColor: 'var(--warning)' }}>
           <div style={{
@@ -354,8 +395,8 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
       {/* Action Buttons */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
 
-        {/* Google Drive Upload */}
-        {hasGdrive && signedIn ? (
+        {/* Google Drive Upload — online */}
+        {hasGdrive && signedIn && isOnline ? (
           <button
             className={`btn btn--lg btn--block ${uploaded ? 'btn--success' : 'btn--primary'}`}
             onClick={handleUploadToGDrive}
@@ -386,8 +427,34 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
           </button>
         ) : null}
 
+        {/* Queue for upload — offline with GDrive configured */}
+        {hasGdrive && !isOnline && !queued && (
+          <button
+            className="btn btn--lg btn--block btn--primary"
+            onClick={handleQueueUpload}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+            Save & Queue Upload for Later
+          </button>
+        )}
+
+        {/* Queued confirmation */}
+        {queued && (
+          <button className="btn btn--lg btn--block btn--success" disabled>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            Queued — Will upload when online
+          </button>
+        )}
+
         {/* Upload destination info */}
-        {hasGdrive && signedIn && !uploaded && !uploading && (
+        {hasGdrive && signedIn && isOnline && !uploaded && !uploading && (
           <div style={{
             fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center',
             fontFamily: 'var(--font-mono)', padding: '0 8px',
@@ -415,9 +482,9 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
           </div>
         )}
 
-        {/* JSON download */}
+        {/* JSON download — always available */}
         <button
-          className={`btn btn--block ${hasGdrive && signedIn ? 'btn--secondary' : 'btn--primary btn--lg'}`}
+          className={`btn btn--block ${hasGdrive && signedIn && isOnline ? 'btn--secondary' : (!hasGdrive || !isOnline) && !queued ? 'btn--primary btn--lg' : 'btn--secondary'}`}
           onClick={handleExportJSON}
         >
           {exported ? '✓ JSON Downloaded' : 'Download JSON'}

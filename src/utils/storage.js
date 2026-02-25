@@ -1,20 +1,31 @@
 /**
- * Simple localStorage wrapper for saving survey progress.
- * In production, swap this for localforage for IndexedDB support
- * (better for large binary data like photos).
+ * Storage utilities using localforage (IndexedDB) for offline-capable
+ * storage of large data like photos.
+ *
+ * Falls back to localStorage for credentials (small data, sync access needed).
  */
 
-const STORAGE_KEY = 'site_survey_progress';
+import localforage from 'localforage';
+
+// Configure localforage
+localforage.config({
+  name: 'site-survey-tool',
+  storeName: 'surveys',
+  description: 'Site survey data and photos',
+});
+
 const CREDENTIALS_KEY = 'site_survey_credentials';
 
-export function saveSurveyProgress(surveyId, data) {
+// ── Survey Progress (async, IndexedDB) ──────────────────────────────
+
+export async function saveSurveyProgress(surveyId, data) {
   try {
-    const all = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const all = (await localforage.getItem('survey_progress')) || {};
     all[surveyId] = {
       ...data,
       lastSaved: new Date().toISOString(),
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+    await localforage.setItem('survey_progress', all);
     return true;
   } catch (e) {
     console.error('Failed to save survey progress:', e);
@@ -22,24 +33,26 @@ export function saveSurveyProgress(surveyId, data) {
   }
 }
 
-export function loadSurveyProgress(surveyId) {
+export async function loadSurveyProgress(surveyId) {
   try {
-    const all = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const all = (await localforage.getItem('survey_progress')) || {};
     return all[surveyId] || null;
   } catch {
     return null;
   }
 }
 
-export function clearSurveyProgress(surveyId) {
+export async function clearSurveyProgress(surveyId) {
   try {
-    const all = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const all = (await localforage.getItem('survey_progress')) || {};
     delete all[surveyId];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+    await localforage.setItem('survey_progress', all);
   } catch {
     // ignore
   }
 }
+
+// ── Credentials (sync, localStorage — small data) ──────────────────
 
 export function saveCredentials(creds) {
   try {
@@ -56,6 +69,56 @@ export function loadCredentials() {
     return null;
   }
 }
+
+// ── Pending Uploads Queue (IndexedDB) ───────────────────────────────
+
+/**
+ * Queue a survey upload for when connectivity returns.
+ * Stores the full payload + photos so they survive app restarts.
+ */
+export async function queuePendingUpload(uploadData) {
+  try {
+    const queue = (await localforage.getItem('pending_uploads')) || [];
+    queue.push({
+      ...uploadData,
+      queuedAt: new Date().toISOString(),
+      id: `upload_${Date.now()}`,
+    });
+    await localforage.setItem('pending_uploads', queue);
+    return true;
+  } catch (e) {
+    console.error('Failed to queue upload:', e);
+    return false;
+  }
+}
+
+export async function getPendingUploads() {
+  try {
+    return (await localforage.getItem('pending_uploads')) || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function removePendingUpload(uploadId) {
+  try {
+    const queue = (await localforage.getItem('pending_uploads')) || [];
+    const filtered = queue.filter((u) => u.id !== uploadId);
+    await localforage.setItem('pending_uploads', filtered);
+  } catch {
+    // ignore
+  }
+}
+
+export async function clearPendingUploads() {
+  try {
+    await localforage.setItem('pending_uploads', []);
+  } catch {
+    // ignore
+  }
+}
+
+// ── Export Payload (unchanged) ──────────────────────────────────────
 
 /**
  * Export the full survey as a JSON blob for download or API submission
@@ -93,6 +156,7 @@ export function exportSurveyPayload(surveyItems, metadata) {
             }
           : null,
         repositioned: cam.repositioned,
+        repositionReason: cam.repositionReason || null,
         height: cam.height,
         rotation: cam.rotation,
         fieldOfView: cam.fieldOfView,
@@ -108,11 +172,9 @@ export function exportSurveyPayload(surveyItems, metadata) {
         obstructions: item.survey.obstructions,
         notes: item.survey.notes,
         photoCount: item.survey.photos.length,
-        // In production, photos would be S3 URLs instead of data URLs
         photos: item.survey.photos.map((p) => ({
           label: p.label,
           timestamp: p.timestamp,
-          // dataUrl excluded for JSON export — would be S3 URL in production
           url: p.s3Url || p.dataUrl,
         })),
         completed: item.survey.completed,

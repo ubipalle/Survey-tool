@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#1a1a2e"/>
+  <g transform="translate(256,280)">
+    <!-- Camera body -->
+    <rect x="-140" y="-80" width="280" height="160" rx="24" fill="#d4a843"/>
+    <!-- Lens housing -->
+    <circle cx="0" cy="0" r="56" fill="#1a1a2e"/>
+    <circle cx="0" cy="0" r="44" fill="#2a2a4e" stroke="#d4a843" stroke-width="3"/>
+    <circle cx="0" cy="0" r="20" fill="#d4a843" opacity="0.3"/>
+    <!-- Flash -->
+    <rect x="-120" y="-66" width="24" height="12" rx="4" fill="#fff" opacity="0.6"/>
+    <!-- Viewfinder bump -->
+    <rect x="-50" y="-120" width="100" height="48" rx="12" fill="#d4a843"/>
+    <!-- Grip detail -->
+    <rect x="80" y="-60" width="8" height="80" rx="4" fill="#c49838" opacity="0.5"/>
+    <rect x="96" y="-60" width="8" height="80" rx="4" fill="#c49838" opacity="0.3"/>
+  </g>
+  <!-- "Survey" text -->
+  <text x="256" y="440" text-anchor="middle" font-family="system-ui, sans-serif" font-size="40" font-weight="700" fill="#ffffff" opacity="0.8" letter-spacing="6">SURVEY</text>
+</svg>
