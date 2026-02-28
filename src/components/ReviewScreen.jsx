@@ -177,13 +177,37 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
 
     try {
       const projectCode = config.projectCode;
+      const dateStr = new Date().toISOString().slice(0, 10);
 
-      // 1. Upload survey JSON
+      // 1. Build photo filename map (so we can reference them in the JSON)
+      const photoFilenames = [];
+      for (const item of surveyItems) {
+        for (let i = 0; i < item.survey.photos.length; i++) {
+          const photo = item.survey.photos[i];
+          const roomSlug = item.roomName.replace(/\s+/g, '-').toLowerCase();
+          const filename = `${dateStr}_${roomSlug}_${photo.label || 'photo'}_${i + 1}.jpg`;
+          photoFilenames.push({ roomId: item.id, photoIndex: i, filename });
+        }
+      }
+
+      // 2. Upload survey JSON (with photo filenames instead of base64 data)
       setUploadProgress('Uploading survey data...');
       const payload = buildPayload();
+      // Replace photo data URLs with filenames
+      let filenameIdx = 0;
+      for (const room of payload.rooms) {
+        room.survey.photos = room.survey.photos.map((p) => {
+          const entry = photoFilenames[filenameIdx++];
+          return {
+            label: p.label,
+            timestamp: p.timestamp,
+            filename: entry?.filename || null,
+          };
+        });
+      }
       await saveSurveyDataApi(projectCode, payload);
 
-      // 2. Upload final camera placements (if any cameras moved)
+      // 3. Upload final camera placements (if any cameras moved)
       if (repositioned > 0) {
         setUploadProgress('Uploading final camera placements...');
         const updatedPlacements = buildUpdatedPlacements(config.cameraJson, surveyItems);
@@ -192,7 +216,7 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
         }
       }
 
-      // 3. Upload photos
+      // 4. Upload photos
       let photoCount = 0;
       for (const item of surveyItems) {
         for (let i = 0; i < item.survey.photos.length; i++) {
@@ -201,7 +225,6 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
           setUploadProgress(`Uploading photo ${photoCount} of ${totalPhotos}...`);
 
           const roomSlug = item.roomName.replace(/\s+/g, '-').toLowerCase();
-          const dateStr = new Date().toISOString().slice(0, 10);
           const photoFilename = `${dateStr}_${roomSlug}_${photo.label || 'photo'}_${i + 1}.jpg`;
 
           await uploadPhotoApi(projectCode, photo.dataUrl, photoFilename);
@@ -234,9 +257,21 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
       const dateStr = new Date().toISOString().slice(0, 10);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
-      // 1. Upload survey JSON
+      // 1. Upload survey JSON (strip photo base64 data, keep filenames)
       setUploadProgress('Uploading survey data...');
       const payload = buildPayload();
+      let photoIdx = 0;
+      for (const room of payload.rooms) {
+        room.survey.photos = room.survey.photos.map((p, i) => {
+          const roomSlug = room.roomName.replace(/\s+/g, '-').toLowerCase();
+          const filename = `${dateStr}_${roomSlug}_${p.label || 'photo'}_${i + 1}.jpg`;
+          return {
+            label: p.label,
+            timestamp: p.timestamp,
+            filename,
+          };
+        });
+      }
       const jsonFilename = `survey_${dateStr}_${timestamp}.json`;
       await uploadJsonFile(jsonFilename, payload, subfolders.surveys);
 
