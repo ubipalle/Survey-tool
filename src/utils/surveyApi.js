@@ -140,6 +140,16 @@ export async function saveSurveyData(projectCode, surveyData) {
 }
 
 /**
+ * Save updated/final camera placements to GDrive "Final Placements" folder.
+ */
+export async function saveFinalPlacements(projectCode, placementsJson) {
+  return apiRequest(`/project/${projectCode}/placements`, {
+    method: 'POST',
+    body: JSON.stringify(placementsJson),
+  });
+}
+
+/**
  * Upload a survey photo.
  * Takes a base64 data URL and converts it for the API.
  */

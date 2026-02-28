@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
 import { exportSurveyPayload, queuePendingUpload } from '../utils/storage';
-import { uploadJsonFile, uploadPhoto } from '../utils/googleDrive';
+import { uploadJsonFile, uploadPhoto as uploadPhotoGDrive } from '../utils/googleDrive';
 import { isSignedIn } from '../utils/googleAuth';
+import {
+  saveSurveyData as saveSurveyDataApi,
+  saveFinalPlacements as saveFinalPlacementsApi,
+  uploadPhoto as uploadPhotoApi,
+  hasToken,
+} from '../utils/surveyApi';
 
 /**
  * Calculate approximate distance between two lat/lng points in meters.
@@ -102,8 +108,14 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
   const totalCameras = surveyItems.reduce((s, i) => s + i.cameras.length, 0);
   const incompleteItems = surveyItems.filter((i) => !i.survey.completed);
 
+  // Determine which upload flow to use
+  const isLinkFlow = !!config.isLinkFlow;
   const hasGdrive = !!config.gdriveProject;
   const signedIn = isSignedIn();
+  const hasApiToken = hasToken();
+
+  // Can upload if: link flow with token, or classic flow with GDrive + signed in
+  const canUpload = (isLinkFlow && hasApiToken) || (!isLinkFlow && hasGdrive && signedIn);
 
   const cameraChanges = buildCameraChanges(config.cameraJson, surveyItems);
 
@@ -155,6 +167,61 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
     }
   };
 
+  /**
+   * Upload via survey API (link flow) — uses backend proxy to GDrive.
+   */
+  const handleUploadViaApi = async () => {
+    setUploading(true);
+    setUploadError('');
+    setUploadProgress('Preparing survey data...');
+
+    try {
+      const projectCode = config.projectCode;
+
+      // 1. Upload survey JSON
+      setUploadProgress('Uploading survey data...');
+      const payload = buildPayload();
+      await saveSurveyDataApi(projectCode, payload);
+
+      // 2. Upload final camera placements (if any cameras moved)
+      if (repositioned > 0) {
+        setUploadProgress('Uploading final camera placements...');
+        const updatedPlacements = buildUpdatedPlacements(config.cameraJson, surveyItems);
+        if (updatedPlacements) {
+          await saveFinalPlacementsApi(projectCode, updatedPlacements);
+        }
+      }
+
+      // 3. Upload photos
+      let photoCount = 0;
+      for (const item of surveyItems) {
+        for (let i = 0; i < item.survey.photos.length; i++) {
+          const photo = item.survey.photos[i];
+          photoCount++;
+          setUploadProgress(`Uploading photo ${photoCount} of ${totalPhotos}...`);
+
+          const roomSlug = item.roomName.replace(/\s+/g, '-').toLowerCase();
+          const dateStr = new Date().toISOString().slice(0, 10);
+          const photoFilename = `${dateStr}_${roomSlug}_${photo.label || 'photo'}_${i + 1}.jpg`;
+
+          await uploadPhotoApi(projectCode, photo.dataUrl, photoFilename);
+        }
+      }
+
+      setUploadProgress('');
+      setUploaded(true);
+    } catch (err) {
+      console.error('API upload error:', err);
+      setUploadError(err.message);
+      setUploadProgress('');
+    }
+    setUploading(false);
+  };
+
+  /**
+   * Upload via Google Drive directly (classic flow).
+   * Updated placements now go to "Final Placements" folder.
+   */
   const handleUploadToGDrive = async () => {
     if (!hasGdrive || !signedIn) return;
 
@@ -167,22 +234,22 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
       const dateStr = new Date().toISOString().slice(0, 10);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
-      // 1. Upload survey JSON (includes camera changes)
+      // 1. Upload survey JSON
       setUploadProgress('Uploading survey data...');
       const payload = buildPayload();
       const jsonFilename = `survey_${dateStr}_${timestamp}.json`;
       await uploadJsonFile(jsonFilename, payload, subfolders.surveys);
 
-      // 2. Upload updated camera placements (if any cameras moved)
+      // 2. Upload updated camera placements to Final Placements
       if (repositioned > 0) {
-        setUploadProgress('Uploading updated camera placements...');
+        setUploadProgress('Uploading final camera placements...');
         const updatedPlacements = buildUpdatedPlacements(config.cameraJson, surveyItems);
         if (updatedPlacements) {
-          const placementsFilename = `camera-placements-updated_${dateStr}.json`;
+          const placementsFilename = `camera-placements-final_${dateStr}.json`;
           await uploadJsonFile(
             placementsFilename,
             updatedPlacements,
-            subfolders.cameraPlacementsFolder
+            subfolders.finalPlacements
           );
         }
       }
@@ -198,7 +265,7 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
           const roomSlug = item.roomName.replace(/\s+/g, '-').toLowerCase();
           const photoFilename = `${dateStr}_${roomSlug}_${photo.label || 'photo'}_${i + 1}.jpg`;
 
-          await uploadPhoto(photoFilename, photo.dataUrl, subfolders.photos);
+          await uploadPhotoGDrive(photoFilename, photo.dataUrl, subfolders.photos);
         }
       }
 
@@ -212,6 +279,8 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
     setUploading(false);
   };
 
+  const handleUpload = isLinkFlow ? handleUploadViaApi : handleUploadToGDrive;
+
   return (
     <div className="screen animate-in">
       <h1 className="screen__title">Survey Review</h1>
@@ -224,94 +293,57 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
           background: 'color-mix(in srgb, var(--warning) 10%, transparent)',
           border: '1px solid var(--warning)',
           borderRadius: 'var(--radius-md)',
+          marginBottom: '16px',
           display: 'flex', alignItems: 'center', gap: '8px',
-          marginBottom: '12px',
         }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="1" y1="1" x2="23" y2="23" />
             <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
             <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
-            <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
-            <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
-            <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
-            <line x1="12" y1="20" x2="12.01" y2="20" />
           </svg>
-          <div style={{ flex: 1, fontSize: '0.8rem', color: 'var(--warning)' }}>
-            <strong>You're offline.</strong> Your survey is saved locally. You can queue the upload for when you're back online.
-          </div>
+          <span style={{ fontSize: '0.85rem', color: 'var(--warning)' }}>
+            You're offline. Data is saved locally.
+          </span>
         </div>
       )}
 
-      {/* Summary Stats */}
-      <div className="card">
-        <div className="card__label">Summary</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <StatBlock
-            label="Rooms Surveyed"
-            value={`${completed}/${total}`}
-            status={completed === total ? 'success' : 'warning'}
-          />
-          <StatBlock
-            label="Total Photos"
-            value={totalPhotos}
-            status={totalPhotos > 0 ? 'success' : 'pending'}
-          />
-          <StatBlock
-            label="Cameras"
-            value={totalCameras}
-            status="success"
-          />
-          <StatBlock
-            label="Repositioned"
-            value={repositioned}
-            status={repositioned > 0 ? 'warning' : 'pending'}
-          />
-        </div>
+      {/* Stats */}
+      <div className="card" style={{
+        display: 'flex', justifyContent: 'space-around', textAlign: 'center',
+      }}>
+        <StatBlock label="Rooms" value={`${completed}/${total}`} status={completed === total ? 'success' : 'warning'} />
+        <StatBlock label="Photos" value={totalPhotos} status={totalPhotos > 0 ? 'success' : 'pending'} />
+        <StatBlock label="Repositioned" value={repositioned} status={repositioned > 0 ? 'warning' : 'success'} />
       </div>
 
-      {/* Incomplete Rooms Warning */}
+      {/* Incomplete rooms warning */}
       {incompleteItems.length > 0 && (
-        <div className="card" style={{ borderColor: 'var(--warning)' }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            marginBottom: '12px',
-          }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--warning)' }}>
-              {incompleteItems.length} room{incompleteItems.length !== 1 ? 's' : ''} incomplete
-            </span>
+        <div className="card">
+          <div className="card__label" style={{ color: 'var(--warning)' }}>
+            Incomplete Rooms ({incompleteItems.length})
           </div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-            Tap a room to go back and complete the survey:
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {incompleteItems.map((item) => (
-              <button
-                key={item.id}
-                className="btn btn--secondary"
-                style={{
-                  justifyContent: 'flex-start', gap: '10px',
-                  padding: '10px 14px',
-                }}
-                onClick={() => onGoToRoom(item.id)}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-                <span style={{ flex: 1, textAlign: 'left' }}>{item.roomName}</span>
-                <span style={{
-                  fontSize: '0.7rem', color: 'var(--text-muted)',
-                  fontFamily: 'var(--font-mono)',
-                }}>
-                  {item.cameras.length} cam · {item.survey.photos.length} photos
-                </span>
-              </button>
-            ))}
-          </div>
+          {incompleteItems.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                padding: '8px 0',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex', alignItems: 'center', gap: '10px',
+                cursor: 'pointer',
+              }}
+              onClick={() => onGoToRoom(item.id)}
+            >
+              <div className="room-item__status room-item__status--pending">
+                {item.cameras.length}
+              </div>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: '0.85rem' }}>{item.roomName}</span>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </div>
+          ))}
         </div>
       )}
 
@@ -395,11 +427,11 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
       {/* Action Buttons */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
 
-        {/* Google Drive Upload — online */}
-        {hasGdrive && signedIn && isOnline ? (
+        {/* Upload — online with available method */}
+        {canUpload && isOnline ? (
           <button
             className={`btn btn--lg btn--block ${uploaded ? 'btn--success' : 'btn--primary'}`}
-            onClick={handleUploadToGDrive}
+            onClick={handleUpload}
             disabled={uploading || uploaded}
           >
             {uploaded ? (
@@ -407,7 +439,7 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                Uploaded to Google Drive
+                Uploaded Successfully
               </>
             ) : uploading ? (
               <>
@@ -421,14 +453,14 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
                   <polyline points="17 8 12 3 7 8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
-                Upload to Google Drive
+                Submit Survey
               </>
             )}
           </button>
         ) : null}
 
-        {/* Queue for upload — offline with GDrive configured */}
-        {hasGdrive && !isOnline && !queued && (
+        {/* Queue for upload — offline with GDrive configured (classic flow) */}
+        {!isLinkFlow && hasGdrive && !isOnline && !queued && (
           <button
             className="btn btn--lg btn--block btn--primary"
             onClick={handleQueueUpload}
@@ -454,15 +486,28 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
         )}
 
         {/* Upload destination info */}
-        {hasGdrive && signedIn && isOnline && !uploaded && !uploading && (
+        {canUpload && isOnline && !uploaded && !uploading && (
           <div style={{
             fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center',
             fontFamily: 'var(--font-mono)', padding: '0 8px',
           }}>
-            → {config.gdriveProject.projectName}/Surveys/
-            {repositioned > 0 && (
+            {isLinkFlow ? (
               <>
-                <br />→ {config.gdriveProject.projectName}/Camera Placements/ (updated positions)
+                → Surveys/
+                {repositioned > 0 && (
+                  <>
+                    <br />→ Final Placements/ (updated positions)
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                → {config.gdriveProject.projectName}/Surveys/
+                {repositioned > 0 && (
+                  <>
+                    <br />→ {config.gdriveProject.projectName}/Final Placements/ (updated positions)
+                  </>
+                )}
               </>
             )}
           </div>
@@ -484,7 +529,7 @@ export default function ReviewScreen({ config, surveyItems, onBack, onGoToRoom, 
 
         {/* JSON download — always available */}
         <button
-          className={`btn btn--block ${hasGdrive && signedIn && isOnline ? 'btn--secondary' : (!hasGdrive || !isOnline) && !queued ? 'btn--primary btn--lg' : 'btn--secondary'}`}
+          className={`btn btn--block ${canUpload && isOnline ? 'btn--secondary' : !queued ? 'btn--primary btn--lg' : 'btn--secondary'}`}
           onClick={handleExportJSON}
         >
           {exported ? '✓ JSON Downloaded' : 'Download JSON'}
